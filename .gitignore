@@ -216,3 +216,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# PhrAIse build artifacts
+dist/
+build/
+*.spec
+*.exe
+phraise/settings_debug.json
