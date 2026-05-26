@@ -217,6 +217,9 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+.idea
+.opencode
+
 # PhrAIse build artifacts
 dist/
 build/
