@@ -47,7 +47,7 @@ def estimate_tokens(text: str) -> int:
 
 def check_output_fit(
     input_text: str,
-    model_type: str = "fast",
+    model_type: str = "model_1",
     mode: str = "optimize",
 ) -> tuple[bool, int, int, str]:
     """Check if the expected output fits within the model's max_tokens.
@@ -89,11 +89,11 @@ def _safe_format(template: str, **kwargs) -> str:
     return template.format(**escaped)
 
 
-def _get_model_config(model_type: str = "fast") -> dict | None:
-    if model_type == "fast":
-        return config.get("models", "fast")
-    elif model_type == "quality":
-        return config.get("models", "quality")
+def _get_model_config(model_type: str = "model_1") -> dict | None:
+    if model_type == "model_1":
+        return config.get("models", "model_1")
+    elif model_type == "model_2":
+        return config.get("models", "model_2")
     return None
 
 
@@ -109,7 +109,7 @@ def optimize_text(
     original_text: str,
     style: str = "concise",
     style_label: str = "Concise",
-    model_type: str = "fast",
+    model_type: str = "model_1",
     on_stream: Callable[[str], None] | None = None,
     on_done: Callable[[dict | None, str | None], None] | None = None,
 ):
@@ -143,7 +143,7 @@ def translate_text(
     original_text: str,
     source_lang: str = "auto",
     target_lang: str = "zh-CN",
-    model_type: str = "fast",
+    model_type: str = "model_1",
     on_stream: Callable[[str], None] | None = None,
     on_done: Callable[[dict | None, str | None], None] | None = None,
 ):
@@ -176,7 +176,7 @@ def translate_text(
 def custom_instruction(
     original_text: str,
     instruction: str,
-    model_type: str = "fast",
+    model_type: str = "model_1",
     on_stream: Callable[[str], None] | None = None,
     on_done: Callable[[dict | None, str | None], None] | None = None,
 ):

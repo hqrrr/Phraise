@@ -12,7 +12,7 @@ CONFIG_FILE = CONFIG_DIR / "settings.json"
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "models": {
-        "fast": {
+        "model_1": {
             "provider": "gemini",
             "api_base": "https://generativelanguage.googleapis.com/v1beta/openai/",
             "api_key": "",
@@ -21,7 +21,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "max_tokens": 4096,
             "extra_params": "",
         },
-        "quality": {
+        "model_2": {
             "provider": "deepseek",
             "api_base": "https://api.deepseek.com/v1",
             "api_key": "",
@@ -74,8 +74,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "start_minimized": False,
         "replace_auto_close": False,
         "theme": "dark",
-        "optimize_model": "fast",
-        "translate_model": "quality",
+        "optimize_model": "model_1",
+        "translate_model": "model_2",
     },
 }
 

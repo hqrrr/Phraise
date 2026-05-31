@@ -112,8 +112,8 @@ class SettingsPanel(QDialog):
         layout = QVBoxLayout(w)
         layout.setSpacing(6)
 
-        fast_cfg = config.get("models", "fast", default={})
-        quality_cfg = config.get("models", "quality", default={})
+        fast_cfg = config.get("models", "model_1", default={})
+        quality_cfg = config.get("models", "model_2", default={})
 
         layout.addWidget(QLabel(t("settings.section.model_assignment")))
         self._build_assign_row(layout, t("settings.label.optimize_model"), "optimize_model")
@@ -122,8 +122,8 @@ class SettingsPanel(QDialog):
         layout.addSpacing(12)
 
         self._model_entries = {}
-        self._build_model_section(layout, t("settings.model.one"), "fast", fast_cfg)
-        self._build_model_section(layout, t("settings.model.two"), "quality", quality_cfg)
+        self._build_model_section(layout, t("settings.model.one"), "model_1", fast_cfg)
+        self._build_model_section(layout, t("settings.model.two"), "model_2", quality_cfg)
         layout.addSpacing(12)
         layout.addStretch()
 
@@ -139,9 +139,9 @@ class SettingsPanel(QDialog):
         lbl.setStyleSheet("color: #a6adc8; font-size: 12px;")
         rl.addWidget(lbl)
         combo = NoScrollComboBox()
-        combo.addItem(t("settings.model.one"), "fast")
-        combo.addItem(t("settings.model.two"), "quality")
-        current = config.get("general", config_key, default="fast")
+        combo.addItem(t("settings.model.one"), "model_1")
+        combo.addItem(t("settings.model.two"), "model_2")
+        current = config.get("general", config_key, default="model_1")
         idx = combo.findData(current)
         if idx >= 0:
             combo.setCurrentIndex(idx)
@@ -320,8 +320,8 @@ class SettingsPanel(QDialog):
                 continue
             current = combo.currentData()
             combo.clear()
-            combo.addItem(t("settings.model.one"), "fast")
-            combo.addItem(t("settings.model.two"), "quality")
+            combo.addItem(t("settings.model.one"), "model_1")
+            combo.addItem(t("settings.model.two"), "model_2")
             idx = combo.findData(current)
             if idx >= 0:
                 combo.setCurrentIndex(idx)
@@ -856,7 +856,7 @@ class SettingsPanel(QDialog):
     def _on_save(self):
         data = config.data
 
-        for model_key in ("fast", "quality"):
+        for model_key in ("model_1", "model_2"):
             e = self._model_entries[model_key]
             provider_val = e["provider_combo"].currentData()
             extra_params_text = e["extra_params"].text().strip()

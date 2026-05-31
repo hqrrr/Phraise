@@ -755,11 +755,11 @@ class FloatingWindow(QWidget):
             return
         self._model_combo.blockSignals(True)
         self._model_combo.clear()
-        self._model_combo.addItem("Fast", "fast")
-        self._model_combo.addItem("Quality", "quality")
+        self._model_combo.addItem("Fast", "model_1")
+        self._model_combo.addItem("Quality", "model_2")
 
         config_key = "optimize_model" if self._current_mode == "optimize" else "translate_model"
-        default_val = "fast" if self._current_mode == "optimize" else "quality"
+        default_val = "model_1" if self._current_mode == "optimize" else "model_2"
         current = config.get("general", config_key, default=default_val)
         idx = self._model_combo.findData(current)
         if idx >= 0:
@@ -791,7 +791,7 @@ class FloatingWindow(QWidget):
 
         ok, _, _, warning = check_output_fit(
             self._current_text,
-            model_type=config.get("general", "optimize_model", default="fast"),
+            model_type=config.get("general", "optimize_model", default="model_1"),
             mode="optimize",
         )
         if not ok:
@@ -806,7 +806,7 @@ class FloatingWindow(QWidget):
             self._current_text,
             style=self._current_style,
             style_label=style_label,
-            model_type=config.get("general", "optimize_model", default="fast"),
+            model_type=config.get("general", "optimize_model", default="model_1"),
             on_done=on_done,
         )
 
@@ -844,7 +844,7 @@ class FloatingWindow(QWidget):
 
         ok, _, _, warning = check_output_fit(
             self._current_text,
-            model_type=config.get("general", "translate_model", default="quality"),
+            model_type=config.get("general", "translate_model", default="model_2"),
             mode="translate",
         )
         if not ok:
@@ -857,7 +857,7 @@ class FloatingWindow(QWidget):
             self._current_text,
             source_lang=self._source_lang.currentData(),
             target_lang=self._target_lang.currentData(),
-            model_type=config.get("general", "translate_model", default="quality"),
+            model_type=config.get("general", "translate_model", default="model_2"),
             on_done=on_done,
         )
 
@@ -883,7 +883,7 @@ class FloatingWindow(QWidget):
 
         custom_instruction(
             self._current_text, instruction,
-            model_type=config.get("general", "optimize_model", default="fast"),
+            model_type=config.get("general", "optimize_model", default="model_1"),
             on_done=on_done,
         )
 
