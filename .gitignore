@@ -226,3 +226,4 @@ build/
 *.spec
 *.exe
 phraise/settings_debug.json
+.omo
