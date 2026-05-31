@@ -186,24 +186,45 @@ def _call_api(
 def _parse_json_response(content: str) -> dict | None:
     content = content.strip()
 
-    m = re.search(r'```(?:json)?\s*([\s\S]*?)```', content)
-    if m:
-        content = m.group(1).strip()
+    result = _try_parse_json(content)
+    if result is not None:
+        return result
 
+    m = re.search(r'```\s*(?:json)?\s*\n?([\s\S]*)```', content)
+    if m:
+        result = _try_parse_json(m.group(1).strip())
+        if result is not None:
+            return result
+
+    return None
+
+
+def _try_parse_json(content: str) -> dict | None:
     for match in re.finditer(r'\{', content):
         start = match.start()
         depth = 0
+        in_string = False
+        escape_next = False
         for i in range(start, len(content)):
-            if content[i] == '{':
-                depth += 1
-            elif content[i] == '}':
-                depth -= 1
-                if depth == 0:
-                    try:
-                        return json.loads(content[start:i + 1])
-                    except json.JSONDecodeError:
-                        break
-                    break
+            ch = content[i]
+            if escape_next:
+                escape_next = False
+                continue
+            if ch == '\\' and in_string:
+                escape_next = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+            elif not in_string:
+                if ch == '{':
+                    depth += 1
+                elif ch == '}':
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            return json.loads(content[start:i + 1])
+                        except json.JSONDecodeError:
+                            break
     return None
 
 

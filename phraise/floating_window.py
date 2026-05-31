@@ -60,10 +60,10 @@ class _DragBar(QWidget):
 class FloatingWindow(QWidget):
     """Main floating window with optimize and translate tabs."""
 
-    def __init__(self, on_close: Callable | None = None):
+    def __init__(self, grabber: TextGrabber, on_close: Callable | None = None):
         super().__init__()
         self._on_close = on_close
-        self._grabber = TextGrabber()
+        self._grabber = grabber
         self._current_text: str = ""
         self._current_mode: str = "optimize"
         self._current_style: str = config.get("floating_window", "last_style", default="concise")
@@ -632,6 +632,8 @@ class FloatingWindow(QWidget):
     def _on_optimize_done(self, result, error):
         self._is_loading = False
         self._set_loading_state(False)
+        for textbox in self._rewrite_texts:
+            textbox.clear()
         if error:
             self._show_error(error)
             return
@@ -639,10 +641,9 @@ class FloatingWindow(QWidget):
             issues = result.get("grammar_issues", [])
             self._populate_grammar_issues(issues)
 
-        if result and "rewrites" in result:
+        if isinstance(result, dict) and "rewrites" in result:
             rewrites = result["rewrites"]
             for i, textbox in enumerate(self._rewrite_texts):
-                textbox.clear()
                 if i < len(rewrites):
                     rw = rewrites[i]
                     content = rw.get("text", "")
@@ -721,7 +722,15 @@ class FloatingWindow(QWidget):
         dlg.exec()
 
     def _do_replace(self, text: str):
-        if self._grabber.replace_text(text):
+        if not text or not text.strip():
+            return
+        try:
+            self._grabber.focus_foreground()
+            success = self._grabber.replace_text(text)
+        except Exception as e:
+            write_error(e, "FloatingWindow._do_replace")
+            success = False
+        if success:
             self._show_toast("已替换")
             if config.get("general", "replace_auto_close", default=False):
                 self._close()

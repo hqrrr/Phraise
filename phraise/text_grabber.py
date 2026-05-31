@@ -41,7 +41,21 @@ class TextGrabber:
             pass
         return ""
 
+    def focus_foreground(self) -> bool:
+        """Attempt to restore focus to the captured foreground control."""
+        if self._foreground_control is None:
+            return False
+        try:
+            self._foreground_control.SetFocus()
+            return True
+        except Exception as e:
+            write_error(e, "focus_foreground")
+            return False
+
     def replace_text(self, new_text: str) -> bool:
+        if not new_text:
+            return False
+        self.focus_foreground()
         if self._replace_via_uia(new_text):
             return True
         return self._replace_via_clipboard(new_text)
@@ -139,14 +153,16 @@ class TextGrabber:
                         selection = tp.GetSelection()
                         if selection and selection[0]:
                             rng = selection[0]
-                            rng.MoveEndpointByRange(
-                                uia.TextPatternRangeEndpoint_End,
-                                rng,
-                                uia.TextPatternRangeEndpoint_Start,
-                            )
                             rng.Select()
                             control.SendKeys(new_text)
                             return True
+                        else:
+                            # No active selection; select all and replace
+                            doc_range = tp.DocumentRange()
+                            if doc_range:
+                                doc_range.Select()
+                                control.SendKeys(new_text)
+                                return True
                 except AttributeError:
                     pass
                 except Exception as e:

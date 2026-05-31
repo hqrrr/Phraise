@@ -69,6 +69,7 @@ class PhrAIseApp:
         if self._window is None:
             try:
                 self._window = FloatingWindow(
+                    grabber=self._grabber,
                     on_close=self._on_window_close,
                 )
             except Exception as e:
