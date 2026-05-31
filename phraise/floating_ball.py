@@ -1,6 +1,8 @@
 from collections.abc import Callable
 from pathlib import Path
 
+import qtawesome as qta
+
 from PySide6.QtCore import Qt, QPoint, QRect, QTimer
 from PySide6.QtGui import QPainter, QColor, QFont, QPen, QRegion, QPixmap
 from PySide6.QtWidgets import QApplication, QWidget, QMenu
@@ -69,10 +71,11 @@ class FloatingBall(QWidget):
             p.setFont(font)
             p.setPen(QColor("#cdd6f4"))
             p.drawText(QRect(0, 0, size, size - 2), Qt.AlignCenter, "AI")
-            p.setPen(accent_color)
-            small_font = QFont("Segoe UI", text_size - 1)
-            p.setFont(small_font)
-            p.drawText(QRect(0, text_size - 2, size, size), Qt.AlignCenter, "\u270e")
+            pencil_size = max(12, int(size * 0.3))
+            pencil_pm = qta.icon("fa5s.pencil-alt", color=accent_color).pixmap(pencil_size, pencil_size)
+            px = (size - pencil_size) // 2
+            py = center + text_size // 2
+            p.drawPixmap(px, py, pencil_pm)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:

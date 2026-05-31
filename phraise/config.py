@@ -18,7 +18,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "api_key": "",
             "model_name": "gemini-2.0-flash",
             "temperature": 0.3,
-            "max_tokens": 1024,
+            "max_tokens": 4096,
+            "extra_params": "",
         },
         "quality": {
             "provider": "deepseek",
@@ -26,7 +27,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "api_key": "",
             "model_name": "deepseek-chat",
             "temperature": 0.5,
-            "max_tokens": 2048,
+            "max_tokens": 8192,
+            "extra_params": "",
         },
         "custom_models": [],
     },
@@ -62,6 +64,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "translation": {
         "source_lang": "auto",
         "target_lang": "zh-CN",
+    },
+    "appearance": {
+        "theme": "dark",
+        "custom_css": "",
     },
     "general": {
         "language": "zh-CN",

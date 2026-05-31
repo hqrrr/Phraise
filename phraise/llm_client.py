@@ -17,6 +17,65 @@ from .prompts import (
 )
 
 
+# ── Token estimation ──────────────────────────────────────────────────────
+
+_CJK_RANGES = [
+    (0x4E00, 0x9FFF), (0x3400, 0x4DBF), (0xF900, 0xFAFF),
+    (0x3040, 0x309F), (0x30A0, 0x30FF), (0xAC00, 0xD7AF),
+]
+
+
+def _is_cjk(ch: str) -> bool:
+    cp = ord(ch)
+    return any(lo <= cp <= hi for lo, hi in _CJK_RANGES)
+
+
+def estimate_tokens(text: str) -> int:
+    """Estimate token count using character-type heuristics.
+
+    CJK characters ≈ 1.5 chars/token, others ≈ 4 chars/token.
+    Accuracy: ±15% for mixed Chinese/English text.
+    """
+    if not text:
+        return 0
+    cjk = sum(1 for ch in text if _is_cjk(ch))
+    non_cjk = len(text) - cjk
+    return max(1, int(cjk / 1.5 + non_cjk / 4.0))
+
+
+def check_output_fit(
+    input_text: str,
+    model_type: str = "fast",
+    mode: str = "optimize",
+) -> tuple[bool, int, int, str]:
+    """Check if the expected output fits within the model's max_tokens.
+
+    Returns (ok, estimated_output, max_tokens, warning_message).
+    If *ok* is False, *warning_message* is non-empty.
+    """
+    model_config = _get_model_config(model_type)
+    if not model_config:
+        return True, 0, 0, ""
+    max_tok = model_config.get("max_tokens", 4096)
+    input_tok = estimate_tokens(input_text)
+
+    if mode == "optimize":
+        estimated_output = int(input_tok * 3.5) + 200
+    elif mode == "translate":
+        estimated_output = int(input_tok * 1.3) + 100
+    else:
+        estimated_output = int(input_tok * 1.5) + 100
+
+    threshold = int(max_tok * 0.85)
+    if estimated_output > threshold:
+        return False, estimated_output, max_tok, (
+            f"输入文本较长（约{input_tok} tokens），"
+            f"预计输出约{estimated_output} tokens，超出设置{max_tok}。"
+            f"建议缩短文本或修改设置。"
+        )
+    return True, estimated_output, max_tok, ""
+
+
 def _safe_format(template: str, **kwargs) -> str:
     escaped = {}
     for k, v in kwargs.items():
@@ -168,12 +227,15 @@ def _call_api(
         )
 
         content = response.choices[0].message.content or ""
+        finish_reason = response.choices[0].finish_reason or ""
         parsed = _parse_json_response(content)
 
         if parsed is None:
             if on_done:
                 on_done(None, content)
         else:
+            if finish_reason == "length":
+                parsed["_truncated"] = True
             if on_done:
                 on_done(parsed, None)
 
@@ -200,11 +262,14 @@ def _parse_json_response(content: str) -> dict | None:
 
 
 def _try_parse_json(content: str) -> dict | None:
+    best = None
+    best_len = 0
     for match in re.finditer(r'\{', content):
         start = match.start()
         depth = 0
         in_string = False
         escape_next = False
+        end = -1
         for i in range(start, len(content)):
             ch = content[i]
             if escape_next:
@@ -221,11 +286,18 @@ def _try_parse_json(content: str) -> dict | None:
                 elif ch == '}':
                     depth -= 1
                     if depth == 0:
-                        try:
-                            return json.loads(content[start:i + 1])
-                        except json.JSONDecodeError:
-                            break
-    return None
+                        end = i
+                        break
+        if end >= 0:
+            try:
+                obj = json.loads(content[start:end + 1])
+                obj_len = end - start + 1
+                if obj_len > best_len:
+                    best = obj
+                    best_len = obj_len
+            except json.JSONDecodeError:
+                pass
+    return best
 
 
 def _handle_error(e: Exception) -> str:

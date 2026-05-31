@@ -1,8 +1,7 @@
 SYSTEM_PROMPT_OPTIMIZE = """你是专业的写作助手。你会收到一段原文和用户选择的风格，
 请给出该风格下的三个不同改写版本。你必须严格返回 JSON。
 
-重要：必须保持原文的语言。如果原文是英文，改写结果必须是英文；如果原文是中文，
-改写结果必须是中文。绝对不要翻译成其他语言。"""
+**重要：必须保持原文的语言。绝对不要翻译成其他语言。**"""
 
 USER_PROMPT_OPTIMIZE = """风格：{style}（{style_label}）
 原文：{original_text}
@@ -32,8 +31,7 @@ USER_PROMPT_TRANSLATE = """翻译为 {target_language}。原文（{source_langua
 返回 JSON：
 {{
   "detected_source_language": "检测到的语言",
-  "translation": "主翻译结果",
-  "alternative": "备选翻译（没有就填 null）"
+  "translation": "主翻译结果"
 }}"""
 
 SYSTEM_PROMPT_CUSTOM = """你是专业写作助手。必须保持原文的语言，不要翻译。"""

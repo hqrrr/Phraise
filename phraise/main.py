@@ -191,6 +191,13 @@ def main():
     app.setStyle("Fusion")
     app.setPalette(_dark_palette())
 
+    from .theme import DEFAULT_THEME, generate_app_stylesheet
+    stylesheet = generate_app_stylesheet(DEFAULT_THEME)
+    custom_css = config.get("appearance", "custom_css", default="")
+    if custom_css:
+        stylesheet += "\n" + custom_css
+    app.setStyleSheet(stylesheet)
+
     phr_app = PhrAIseApp()
     phr_app.run()
 
