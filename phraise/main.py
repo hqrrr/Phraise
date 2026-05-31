@@ -7,6 +7,7 @@ from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QFont, QPixmap, QIcon
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
 
 from .config import config
+from .i18n import t, add_listener, remove_listener
 from .dispatch import run_on_main
 from .error_log import write_error
 from .floating_ball import FloatingBall
@@ -47,14 +48,16 @@ class PhrAIseApp:
         self._tray.setToolTip("PhrAIse")
 
         menu = QMenu()
-        menu.addAction("显示悬浮球", self._toggle_ball)
+        menu.addAction(t("app.tray.show_ball"), self._toggle_ball)
         menu.addSeparator()
-        menu.addAction("设置...", self._show_settings)
+        menu.addAction(t("app.tray.settings"), self._show_settings)
         menu.addSeparator()
-        menu.addAction("退出 PhrAIse", self._quit_app)
+        menu.addAction(t("app.tray.quit"), self._quit_app)
         self._tray.setContextMenu(menu)
+        self._tray_menu = menu
         self._tray.activated.connect(self._on_tray_activated)
         self._tray.show()
+        add_listener(self._rebuild_menus)
 
     def _on_tray_activated(self, reason):
         if reason == QSystemTrayIcon.DoubleClick:
@@ -90,13 +93,24 @@ class PhrAIseApp:
     def _ball_right_click(self, event):
         menu = QMenu()
         if self._ball.isVisible():
-            menu.addAction("隐藏悬浮球", self._ball.hide)
+            menu.addAction(t("app.tray.hide_ball"), self._ball.hide)
         else:
-            menu.addAction("显示悬浮球", self._ball.show)
-        menu.addAction("设置...", self._show_settings)
+            menu.addAction(t("app.tray.show_ball"), self._ball.show)
+        menu.addAction(t("app.tray.settings"), self._show_settings)
         menu.addSeparator()
-        menu.addAction("退出", self._quit_app)
+        menu.addAction(t("app.tray.quit_short"), self._quit_app)
         menu.exec(event.globalPosition().toPoint())
+
+    def _rebuild_menus(self):
+        if self._tray:
+            menu = QMenu()
+            menu.addAction(t("app.tray.show_ball"), self._toggle_ball)
+            menu.addSeparator()
+            menu.addAction(t("app.tray.settings"), self._show_settings)
+            menu.addSeparator()
+            menu.addAction(t("app.tray.quit"), self._quit_app)
+            self._tray.setContextMenu(menu)
+            self._tray_menu = menu
 
     def _toggle_ball(self):
         if self._ball:
@@ -138,6 +152,7 @@ class PhrAIseApp:
             self._expand_window(mode=mode)
 
     def _quit_app(self):
+        remove_listener(self._rebuild_menus)
         self._running = False
         hotkey_manager.stop()
         try:

@@ -1,4 +1,5 @@
 from .config import config
+from .i18n import t, SUPPORTED_LANGUAGES, set_language, get_language, add_listener, remove_listener
 
 import threading
 
@@ -11,15 +12,42 @@ from PySide6.QtWidgets import (
 
 import json
 
+
+class NoScrollComboBox(QComboBox):
+    """QComboBox that blocks scroll wheel when the dropdown popup is closed.
+
+    Prevents accidental value changes when scrolling the settings dialog
+    while the mouse cursor happens to be over a combo box.
+    When the popup is open and has many items, wheel scrolls the list normally.
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._popup_open = False
+
+    def showPopup(self):
+        self._popup_open = True
+        super().showPopup()
+
+    def hidePopup(self):
+        self._popup_open = False
+        super().hidePopup()
+
+    def wheelEvent(self, event):
+        if self._popup_open:
+            super().wheelEvent(event)
+        else:
+            event.ignore()
+
+
 PROVIDER_PRESETS = {
     "openai": {"label": "OpenAI", "api_base": "https://api.openai.com/v1"},
     "claude": {"label": "Claude (Anthropic)", "api_base": "https://api.anthropic.com/v1"},
     "gemini": {"label": "Gemini (Google)", "api_base": "https://generativelanguage.googleapis.com/v1beta/openai/"},
     "deepseek": {"label": "DeepSeek", "api_base": "https://api.deepseek.com/v1"},
     "openrouter": {"label": "OpenRouter", "api_base": "https://openrouter.ai/api/v1"},
-    "kimi": {"label": "Kimi (月之暗面)", "api_base": "https://api.moonshot.cn/v1"},
-    "glm": {"label": "GLM (智谱)", "api_base": "https://open.bigmodel.cn/api/paas/v4"},
-    "qwen": {"label": "Qwen (通义千问)", "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1"},
+    "kimi": {"label": "Kimi (Moonshot)", "api_base": "https://api.moonshot.cn/v1"},
+    "glm": {"label": "GLM (Zhipu)", "api_base": "https://open.bigmodel.cn/api/paas/v4"},
+    "qwen": {"label": "Qwen (Tongyi)", "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1"},
     "siliconflow": {"label": "SiliconFlow", "api_base": "https://api.siliconflow.cn/v1"},
 }
 
@@ -29,7 +57,7 @@ class SettingsPanel(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("设置 - PhrAIse")
+        self.setWindowTitle(t("settings.title"))
         self.resize(550, 500)
         self.setMinimumSize(500, 400)
         self.setStyleSheet("QDialog { background: #1e1e2e; }")
@@ -38,30 +66,34 @@ class SettingsPanel(QDialog):
         flags |= Qt.WindowCloseButtonHint
         self.setWindowFlags(flags)
 
-        self._custom_model_entries: list[dict] = []
-        self._custom_model_list_layout = None
+        self._registered_listener = False
 
         self._build_ui()
+
+        add_listener(self._retranslate_ui)
+        self._registered_listener = True
+        self.finished.connect(lambda: remove_listener(self._retranslate_ui))
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
 
-        tabs = QTabWidget()
-        tabs.setStyleSheet("""
+        self._tabs = QTabWidget()
+        self._tabs.setStyleSheet("""
             QTabWidget::pane { border: none; background: #1e1e2e; }
             QTabBar::tab { background: #313244; color: #a6adc8; padding: 8px 20px;
                            border: none; font-size: 13px; font-weight: 500; }
             QTabBar::tab:selected { background: #6c5ce7; color: #fff; }
             QTabBar::tab:hover:!selected { background: #45475a; }
         """)
-        tabs.addTab(self._build_model_tab(), "模型")
-        tabs.addTab(self._build_style_tab(), "样式")
-        tabs.addTab(self._build_trigger_tab(), "触发")
-        tabs.addTab(self._build_appearance_tab(), "外观")
-        layout.addWidget(tabs)
+        self._tabs.addTab(self._build_model_tab(), t("settings.tab.models"))
+        self._tabs.addTab(self._build_style_tab(), t("settings.tab.styles"))
+        self._tabs.addTab(self._build_trigger_tab(), t("settings.tab.triggers"))
+        self._tabs.addTab(self._build_appearance_tab(), t("settings.tab.appearance"))
+        self._tabs.addTab(self._build_language_tab(), t("settings.tab.language"))
+        layout.addWidget(self._tabs)
 
-        save_btn = QPushButton("保存并关闭")
+        save_btn = QPushButton(t("settings.btn.save"))
         save_btn.setFixedHeight(36)
         save_btn.setStyleSheet("""
             QPushButton { background: #6c5ce7; color: white; border: none;
@@ -83,17 +115,16 @@ class SettingsPanel(QDialog):
         fast_cfg = config.get("models", "fast", default={})
         quality_cfg = config.get("models", "quality", default={})
 
-        layout.addWidget(QLabel("功能模型分配"))
-        self._build_assign_row(layout, "优化模型：", "optimize_model")
-        self._build_assign_row(layout, "翻译模型：", "translate_model")
+        layout.addWidget(QLabel(t("settings.section.model_assignment")))
+        self._build_assign_row(layout, t("settings.label.optimize_model"), "optimize_model")
+        self._build_assign_row(layout, t("settings.label.translate_model"), "translate_model")
 
         layout.addSpacing(12)
 
         self._model_entries = {}
-        self._build_model_section(layout, "模型一", "fast", fast_cfg)
-        self._build_model_section(layout, "模型二", "quality", quality_cfg)
+        self._build_model_section(layout, t("settings.model.one"), "fast", fast_cfg)
+        self._build_model_section(layout, t("settings.model.two"), "quality", quality_cfg)
         layout.addSpacing(12)
-        self._build_custom_model_section(layout)
         layout.addStretch()
 
         scroll.setWidget(w)
@@ -104,16 +135,12 @@ class SettingsPanel(QDialog):
         rl = QHBoxLayout(row)
         rl.setContentsMargins(0, 0, 0, 0)
         lbl = QLabel(label_text)
-        lbl.setFixedWidth(80)
+        lbl.setFixedWidth(120)
         lbl.setStyleSheet("color: #a6adc8; font-size: 12px;")
         rl.addWidget(lbl)
-        combo = QComboBox()
-        combo.addItem("模型一", "fast")
-        combo.addItem("模型二", "quality")
-        customs = config.get("models", "custom_models", default=[])
-        for i, cm in enumerate(customs):
-            label = f"{cm.get('provider','')}-{cm.get('model_name','')}"
-            combo.addItem(label, f"custom:{i}")
+        combo = NoScrollComboBox()
+        combo.addItem(t("settings.model.one"), "fast")
+        combo.addItem(t("settings.model.two"), "quality")
         current = config.get("general", config_key, default="fast")
         idx = combo.findData(current)
         if idx >= 0:
@@ -134,10 +161,10 @@ class SettingsPanel(QDialog):
         lbl.setStyleSheet("color: #a6adc8;")
         rl.addWidget(lbl)
 
-        combo = QComboBox()
+        combo = NoScrollComboBox()
         for key, preset in PROVIDER_PRESETS.items():
             combo.addItem(preset["label"], key)
-        combo.addItem("自定义 (手动输入)", "custom")
+        combo.addItem(t("settings.provider_custom"), "custom")
         combo.setStyleSheet(self._combo_style())
         rl.addWidget(combo, 1)
         layout.addWidget(row)
@@ -208,18 +235,19 @@ class SettingsPanel(QDialog):
         model_lbl.setFixedWidth(120)
         model_lbl.setStyleSheet("color: #a6adc8;")
         ml.addWidget(model_lbl)
-        model_combo = QComboBox()
+        model_combo = NoScrollComboBox()
         model_combo.setEditable(True)
-        model_combo.setInsertPolicy(QComboBox.NoInsert)
+        model_combo.setInsertPolicy(NoScrollComboBox.NoInsert)
+        model_combo.setPlaceholderText(t("settings.placeholder.model_name"))
         if model_name:
             model_combo.addItem(model_name)
             model_combo.setCurrentText(model_name)
         model_combo.setStyleSheet(self._combo_style())
         ml.addWidget(model_combo, 1)
 
-        fetch_btn = QPushButton("获取模型")
+        fetch_btn = QPushButton(t("settings.btn.fetch_models"))
         fetch_btn.setFixedHeight(28)
-        fetch_btn.setFixedWidth(80)
+        fetch_btn.setFixedWidth(110)
         fetch_btn.setStyleSheet(self._small_btn_style())
         fetch_btn.clicked.connect(lambda checked, k=model_key: self._fetch_models(k))
         ml.addWidget(fetch_btn)
@@ -237,7 +265,7 @@ class SettingsPanel(QDialog):
         tl.addWidget(temp_lbl)
         min_lbl = QLabel("\U0001f52c")
         min_lbl.setStyleSheet("color: #a6adc8; font-size: 14px;")
-        min_lbl.setToolTip("精确")
+        min_lbl.setToolTip(t("settings.tooltip.precise"))
         tl.addWidget(min_lbl)
         slider = QSlider(Qt.Horizontal)
         slider.setRange(0, 100)
@@ -252,7 +280,7 @@ class SettingsPanel(QDialog):
         tl.addWidget(slider, 1)
         max_lbl = QLabel("\u2728")
         max_lbl.setStyleSheet("color: #a6adc8; font-size: 14px;")
-        max_lbl.setToolTip("创意")
+        max_lbl.setToolTip(t("settings.tooltip.creative"))
         tl.addWidget(max_lbl)
         val_lbl = QLabel(f"{temp_val:.2f}")
         val_lbl.setFixedWidth(36)
@@ -264,14 +292,14 @@ class SettingsPanel(QDialog):
         entries["temperature_slider"] = slider
 
         entries["max_tokens"] = self._add_entry(layout, "Max Tokens:", str(cfg.get("max_tokens", 1024)))
-        entries["extra_params"] = self._add_entry(layout, "额外参数:", cfg.get("extra_params", ""))
-        entries["extra_params"].setPlaceholderText('JSON格式, 如: {"reasoning_effort":"medium"}')
+        entries["extra_params"] = self._add_entry(layout, t("settings.label.extra_params"), cfg.get("extra_params", ""))
+        entries["extra_params"].setPlaceholderText(t("settings.placeholder.extra_params"))
 
         btn_row = QWidget()
         bl = QHBoxLayout(btn_row)
         bl.setContentsMargins(0, 2, 0, 0)
 
-        test_btn = QPushButton("测试连接")
+        test_btn = QPushButton(t("settings.btn.test_connection"))
         test_btn.setFixedHeight(28)
         test_btn.setStyleSheet(self._small_btn_style())
         test_btn.clicked.connect(lambda checked, k=model_key: self._test_model(k))
@@ -285,198 +313,6 @@ class SettingsPanel(QDialog):
         entries["status"] = status
         self._model_entries[model_key] = entries
 
-    def _build_custom_model_section(self, layout):
-        header = QWidget()
-        hl = QHBoxLayout(header)
-        hl.setContentsMargins(0, 0, 0, 0)
-        hl.addWidget(QLabel("自定义模型"))
-        add_btn = QPushButton("添加模型")
-        add_btn.setFixedHeight(28)
-        add_btn.setStyleSheet(self._small_btn_style())
-        add_btn.clicked.connect(lambda: self._show_custom_model_dialog())
-        hl.addWidget(add_btn)
-        hl.addStretch()
-        layout.addWidget(header)
-
-        self._custom_model_list_layout = QVBoxLayout()
-        self._custom_model_list_layout.setSpacing(4)
-        layout.addLayout(self._custom_model_list_layout)
-
-        customs = config.get("models", "custom_models", default=[])
-        for cm in customs:
-            entry = {
-                "provider": QLineEdit(cm.get("provider", "")),
-                "api_base": QLineEdit(cm.get("api_base", "")),
-                "api_key": QLineEdit(cm.get("api_key", "")),
-                "model_name": QLineEdit(cm.get("model_name", "")),
-                "temperature": QLineEdit(str(cm.get("temperature", "0.3"))),
-                "max_tokens": QLineEdit(str(cm.get("max_tokens", "1024"))),
-                "extra_params": QLineEdit(cm.get("extra_params", "")),
-            }
-            self._custom_model_entries.append(entry)
-        self._rebuild_custom_model_display()
-
-    def _rebuild_custom_model_display(self):
-        while self._custom_model_list_layout.count():
-            item = self._custom_model_list_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        for i, entry in enumerate(self._custom_model_entries):
-            self._add_custom_model_display_row(i, entry)
-
-    def _add_custom_model_display_row(self, idx, entry):
-        row = QWidget()
-        rl = QHBoxLayout(row)
-        rl.setContentsMargins(6, 4, 6, 4)
-        row.setStyleSheet("background: #313244; border-radius: 4px;")
-
-        provider_lbl = QLabel(entry["provider"].text() or "—")
-        provider_lbl.setFixedWidth(80)
-        provider_lbl.setStyleSheet("color: #cdd6f4; font-size: 12px;")
-        rl.addWidget(provider_lbl)
-
-        model_lbl = QLabel(entry["model_name"].text() or "—")
-        model_lbl.setStyleSheet("color: #a6adc8; font-size: 12px;")
-        rl.addWidget(model_lbl, 1)
-
-        extra = entry.get("extra_params", QLineEdit("")).text().strip()
-        if extra:
-            extra_lbl = QLabel("+params")
-            extra_lbl.setStyleSheet("color: #6c5ce7; font-size: 10px; padding: 0 4px;")
-            rl.addWidget(extra_lbl)
-
-        edit_btn = QPushButton("编辑")
-        edit_btn.setFixedSize(50, 24)
-        edit_btn.setStyleSheet(self._small_btn_style())
-        edit_btn.clicked.connect(lambda checked, i=idx: self._show_custom_model_dialog(i))
-        rl.addWidget(edit_btn)
-
-        del_btn = QPushButton("删除")
-        del_btn.setFixedSize(50, 24)
-        del_btn.setStyleSheet("""
-            QPushButton { background: #45475a; color: #f38ba8; border: none;
-                          border-radius: 6px; font-size: 12px; padding: 4px 12px; }
-            QPushButton:hover { background: #f38ba8; color: #fff; }
-        """)
-        del_btn.clicked.connect(lambda checked, i=idx: self._remove_custom_model(i))
-        rl.addWidget(del_btn)
-
-        self._custom_model_list_layout.addWidget(row)
-
-    def _show_custom_model_dialog(self, edit_idx=None):
-        dialog = QDialog(self)
-        dialog.setWindowTitle("编辑自定义模型" if edit_idx is not None else "添加自定义模型")
-        dialog.resize(440, 400)
-        dialog.setStyleSheet("QDialog { background: #1e1e2e; }")
-        dlg_layout = QVBoxLayout(dialog)
-        dlg_layout.setSpacing(6)
-
-        def _dlg_combo(layout, label_text, items, current_data=None):
-            row = QWidget()
-            rl = QHBoxLayout(row)
-            rl.setContentsMargins(0, 0, 0, 0)
-            lbl = QLabel(label_text)
-            lbl.setFixedWidth(90)
-            lbl.setStyleSheet("color: #a6adc8; font-size: 12px;")
-            rl.addWidget(lbl)
-            combo = QComboBox()
-            combo.setEditable(True)
-            combo.setInsertPolicy(QComboBox.NoInsert)
-            for label, data in items:
-                combo.addItem(label, data)
-            if current_data:
-                idx = combo.findData(current_data)
-                if idx >= 0:
-                    combo.setCurrentIndex(idx)
-            combo.setStyleSheet(self._combo_style())
-            rl.addWidget(combo, 1)
-            layout.addWidget(row)
-            return combo
-
-        provider_combo = None
-        fields: dict[str, QLineEdit] = {}
-        extra_params_text = ""
-        if edit_idx is not None:
-            entry = self._custom_model_entries[edit_idx]
-            saved_provider = entry["provider"].text()
-            provider_items = [(preset["label"], key) for key, preset in PROVIDER_PRESETS.items()]
-            provider_items.append(("自定义 (手动输入)", "custom"))
-            provider_combo = _dlg_combo(dlg_layout, "Provider:", provider_items, saved_provider)
-            if not saved_provider or saved_provider not in PROVIDER_PRESETS:
-                idx = provider_combo.findData("custom")
-                if idx >= 0:
-                    provider_combo.setCurrentIndex(idx)
-            fields["api_base"] = self._dlg_field(dlg_layout, "API Base:", entry["api_base"].text())
-            fields["api_key"] = self._dlg_field(dlg_layout, "API Key:", entry["api_key"].text(), password=True)
-            fields["model_name"] = self._dlg_field(dlg_layout, "Model Name:", entry["model_name"].text())
-            fields["temperature"] = self._dlg_field(dlg_layout, "Temperature:", entry["temperature"].text())
-            fields["max_tokens"] = self._dlg_field(dlg_layout, "Max Tokens:", entry["max_tokens"].text())
-            extra_params_text = entry["extra_params"].text()
-        else:
-            provider_items = [(preset["label"], key) for key, preset in PROVIDER_PRESETS.items()]
-            provider_items.append(("自定义 (手动输入)", "custom"))
-            provider_combo = _dlg_combo(dlg_layout, "Provider:", provider_items)
-            fields["api_base"] = self._dlg_field(dlg_layout, "API Base:", "")
-            fields["api_key"] = self._dlg_field(dlg_layout, "API Key:", "", password=True)
-            fields["model_name"] = self._dlg_field(dlg_layout, "Model Name:", "")
-            fields["temperature"] = self._dlg_field(dlg_layout, "Temperature:", "0.3")
-            fields["max_tokens"] = self._dlg_field(dlg_layout, "Max Tokens:", "1024")
-
-        fields["extra_params"] = self._dlg_field(dlg_layout, "额外参数:", extra_params_text)
-        fields["extra_params"].setPlaceholderText('JSON格式, 如: {"reasoning_effort":"medium"}')
-
-        btn_row = QWidget()
-        bl = QHBoxLayout(btn_row)
-        bl.setContentsMargins(0, 8, 0, 0)
-        cancel_btn = QPushButton("取消")
-        cancel_btn.setFixedHeight(30)
-        cancel_btn.setStyleSheet(self._small_btn_style())
-        cancel_btn.clicked.connect(dialog.reject)
-        bl.addWidget(cancel_btn)
-        bl.addStretch()
-        save_btn = QPushButton("保存")
-        save_btn.setFixedHeight(30)
-        save_btn.setStyleSheet("""
-            QPushButton { background: #6c5ce7; color: white; border: none;
-                          border-radius: 6px; font-size: 12px; font-weight: 600;
-                          padding: 6px 20px; }
-            QPushButton:hover { background: #7c6cf7; }
-        """)
-
-        def on_save():
-            provider_data = provider_combo.currentData()
-            provider_str = provider_data if provider_data and provider_data != "custom" else provider_combo.currentText()
-            if edit_idx is not None:
-                entry = self._custom_model_entries[edit_idx]
-                entry["provider"].setText(provider_str)
-                for key in fields:
-                    entry[key].setText(fields[key].text())
-            else:
-                entry = {
-                    "provider": QLineEdit(provider_str),
-                    "api_base": QLineEdit(fields["api_base"].text()),
-                    "api_key": QLineEdit(fields["api_key"].text()),
-                    "model_name": QLineEdit(fields["model_name"].text()),
-                    "temperature": QLineEdit(fields["temperature"].text() or "0.3"),
-                    "max_tokens": QLineEdit(fields["max_tokens"].text() or "1024"),
-                    "extra_params": QLineEdit(fields["extra_params"].text()),
-                }
-                self._custom_model_entries.append(entry)
-            self._rebuild_custom_model_display()
-            self._refresh_assign_combos()
-            dialog.accept()
-
-        save_btn.clicked.connect(on_save)
-        bl.addWidget(save_btn)
-        dlg_layout.addWidget(btn_row)
-        dialog.exec()
-
-    def _remove_custom_model(self, idx):
-        if 0 <= idx < len(self._custom_model_entries):
-            self._custom_model_entries.pop(idx)
-            self._rebuild_custom_model_display()
-            self._refresh_assign_combos()
-
     def _refresh_assign_combos(self):
         for attr in ("_assign_optimize_model", "_assign_translate_model"):
             combo = getattr(self, attr, None)
@@ -484,12 +320,8 @@ class SettingsPanel(QDialog):
                 continue
             current = combo.currentData()
             combo.clear()
-            combo.addItem("模型一", "fast")
-            combo.addItem("模型二", "quality")
-            for i in range(len(self._custom_model_entries)):
-                entry = self._custom_model_entries[i]
-                label = f"{entry['provider'].text()}-{entry['model_name'].text()}"
-                combo.addItem(label, f"custom:{i}")
+            combo.addItem(t("settings.model.one"), "fast")
+            combo.addItem(t("settings.model.two"), "quality")
             idx = combo.findData(current)
             if idx >= 0:
                 combo.setCurrentIndex(idx)
@@ -521,7 +353,7 @@ class SettingsPanel(QDialog):
         api_key = entries["api_key"].text()
         model_name = entries["model_combo"].currentText()
 
-        entries["status"].setText("正在测试...")
+        entries["status"].setText(t("settings.status.testing"))
         entries["status"].setStyleSheet("color: #f9e2af; font-size: 11px; padding: 2px 8px;")
         QApplication.processEvents()
 
@@ -547,7 +379,7 @@ class SettingsPanel(QDialog):
         api_base = entries["api_base"].text()
         api_key = entries["api_key"].text()
 
-        entries["status"].setText("正在获取模型列表...")
+        entries["status"].setText(t("settings.status.fetching"))
         entries["status"].setStyleSheet("color: #f9e2af; font-size: 11px; padding: 2px 8px;")
         QApplication.processEvents()
 
@@ -567,14 +399,14 @@ class SettingsPanel(QDialog):
             return
 
         if not names:
-            entries["status"].setText("未获取到模型")
+            entries["status"].setText(t("settings.status.no_models"))
             entries["status"].setStyleSheet("color: #a6adc8; font-size: 11px; padding: 2px 8px;")
             return
 
         entries["model_combo"].clear()
         entries["model_combo"].addItems(names)
         entries["model_combo"].setCurrentIndex(0)
-        entries["status"].setText(f"已获取 {len(names)} 个模型")
+        entries["status"].setText(t("settings.status.models_fetched", count=len(names)))
         entries["status"].setStyleSheet("color: #a6e3a1; font-size: 11px; padding: 2px 8px;")
 
     def _build_style_tab(self):
@@ -586,7 +418,7 @@ class SettingsPanel(QDialog):
         layout.setSpacing(2)
         self._style_layout = layout
 
-        layout.addWidget(QLabel("预设风格"))
+        layout.addWidget(QLabel(t("settings.section.preset_styles")))
         header = QWidget()
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(6, 2, 6, 2)
@@ -594,12 +426,12 @@ class SettingsPanel(QDialog):
         hl_id.setFixedWidth(80)
         hl_id.setStyleSheet("color: #a6adc8; font-weight: bold; font-size: 11px;")
         header_layout.addWidget(hl_id)
-        hl_label = QLabel("名称")
+        hl_label = QLabel(t("settings.header.style_label"))
         hl_label.setFixedWidth(80)
         hl_label.setStyleSheet("color: #a6adc8; font-weight: bold; font-size: 11px;")
         header_layout.addWidget(hl_label)
-        hl_kw = QLabel("提示关键词")
-        hl_kw.setFixedWidth(100)
+        hl_kw = QLabel(t("settings.header.style_keyword"))
+        hl_kw.setFixedWidth(150)
         hl_kw.setStyleSheet("color: #a6adc8; font-weight: bold; font-size: 11px;")
         header_layout.addWidget(hl_kw)
         header_layout.addStretch()
@@ -624,7 +456,7 @@ class SettingsPanel(QDialog):
             row_layout.addWidget(label_entry)
 
             kw_entry = QLineEdit(s.get("prompt_keyword", ""))
-            kw_entry.setFixedWidth(100)
+            kw_entry.setFixedWidth(150)
             kw_entry.setStyleSheet(self._entry_style())
             row_layout.addWidget(kw_entry)
 
@@ -645,7 +477,7 @@ class SettingsPanel(QDialog):
             del_btn.clicked.connect(lambda checked, e=entry: self._remove_style_entry(e))
 
         # "+" add button
-        add_btn = QPushButton("+ 添加风格")
+        add_btn = QPushButton(t("settings.btn.add_style"))
         add_btn.setFixedHeight(30)
         add_btn.setStyleSheet("""
             QPushButton { background: transparent; color: #6c5ce7; border: 1px dashed #6c5ce7;
@@ -655,6 +487,10 @@ class SettingsPanel(QDialog):
         add_btn.clicked.connect(lambda: self._add_style_row())
         layout.addWidget(add_btn)
         self._style_add_btn = add_btn
+
+        restart_styles = QLabel(t("settings.restart_required"))
+        restart_styles.setStyleSheet("color: #f9e2af; font-size: 10px; padding-left: 4px;")
+        layout.addWidget(restart_styles)
 
         self._update_style_delete_buttons()
         layout.addStretch()
@@ -680,7 +516,7 @@ class SettingsPanel(QDialog):
         row_layout.addWidget(label_entry)
 
         kw_entry = QLineEdit(keyword_val)
-        kw_entry.setFixedWidth(100)
+        kw_entry.setFixedWidth(150)
         kw_entry.setStyleSheet(self._entry_style())
         row_layout.addWidget(kw_entry)
 
@@ -724,11 +560,11 @@ class SettingsPanel(QDialog):
         layout.setSpacing(4)
 
         trigger_cfg = config.get("trigger", default={})
-        layout.addWidget(QLabel("快捷键设置"))
+        layout.addWidget(QLabel(t("settings.section.hotkeys")))
 
         self._hk_trigger, self._hk_trigger_status = self._build_hotkey_row(
-            layout, "触发快捷键:", trigger_cfg.get("hotkey_trigger", "ctrl+c+c"))
-        self._hk_trigger.setPlaceholderText("例如: ctrl+c+c 或 ctrl+shift+o")
+            layout, t("settings.label.trigger_hotkey"), trigger_cfg.get("hotkey_trigger", "ctrl+c+c"))
+        self._hk_trigger.setPlaceholderText(t("settings.placeholder.trigger_hotkey"))
         # Reconnect trigger hotkey to use double-tap-aware validation
         try:
             self._hk_trigger.textChanged.disconnect()
@@ -737,12 +573,15 @@ class SettingsPanel(QDialog):
         self._hk_trigger.textChanged.connect(
             lambda text, e=self._hk_trigger, s=self._hk_trigger_status:
                 self._on_hotkey_text_changed_trigger(text, e, s))
-        # Re-validate initial value (e.g. "ctrl+c+c" fails _validate_hotkey used by _build_hotkey_row)
         if self._validate_trigger_hotkey(self._hk_trigger.text()):
             self._hk_trigger.setStyleSheet(self._hotkey_entry_style(True))
             self._hk_trigger_status.setText("")
         self._hk_toggle, self._hk_toggle_status = self._build_hotkey_row(
-            layout, "切换悬浮球:", trigger_cfg.get("hotkey_toggle_ball", "ctrl+shift+b"))
+            layout, t("settings.label.toggle_ball"), trigger_cfg.get("hotkey_toggle_ball", "ctrl+shift+b"))
+
+        restart_lbl = QLabel(t("settings.restart_required"))
+        restart_lbl.setStyleSheet("color: #f9e2af; font-size: 10px; padding-left: 120px;")
+        layout.addWidget(restart_lbl)
 
         layout.addStretch()
 
@@ -833,7 +672,7 @@ class SettingsPanel(QDialog):
         row_layout.addWidget(lbl)
 
         entry = QLineEdit(default_value)
-        entry.setPlaceholderText("例如: ctrl+shift+o")
+        entry.setPlaceholderText(t("settings.placeholder.hotkey"))
         entry.setStyleSheet(self._hotkey_entry_style(True))
         row_layout.addWidget(entry, 1)
 
@@ -846,7 +685,7 @@ class SettingsPanel(QDialog):
 
         if not self._validate_hotkey(default_value):
             entry.setStyleSheet(self._hotkey_entry_style(False))
-            status.setText("⚠ 格式无效")
+            status.setText(t("settings.status.invalid_format"))
 
         entry.textChanged.connect(
             lambda text, e=entry, s=status: self._on_hotkey_text_changed(text, e, s)
@@ -860,18 +699,18 @@ class SettingsPanel(QDialog):
             status_label.setText("")
         else:
             entry.setStyleSheet(self._hotkey_entry_style(False))
-            status_label.setText("⚠ 格式无效")
+            status_label.setText(t("settings.status.invalid_format"))
 
     def _on_hotkey_text_changed_trigger(self, text, entry, status_label):
         if not text.strip():
             entry.setStyleSheet(self._hotkey_entry_style(False))
-            status_label.setText("⚠ 格式无效")
+            status_label.setText(t("settings.status.invalid_format"))
         elif self._validate_trigger_hotkey(text):
             entry.setStyleSheet(self._hotkey_entry_style(True))
             status_label.setText("")
         else:
             entry.setStyleSheet(self._hotkey_entry_style(False))
-            status_label.setText("⚠ 格式无效")
+            status_label.setText(t("settings.status.invalid_format"))
 
     def _build_appearance_tab(self):
         scroll = QScrollArea()
@@ -885,16 +724,16 @@ class SettingsPanel(QDialog):
         ball_cfg = config.get("floating_ball", default={})
         appearance_cfg = config.get("appearance", default={})
 
-        layout.addWidget(QLabel("常规设置"))
+        layout.addWidget(QLabel(t("settings.section.general")))
         theme_row = QWidget()
         theme_layout = QHBoxLayout(theme_row)
         theme_layout.setContentsMargins(0, 0, 0, 0)
-        theme_layout.addWidget(QLabel("主题:"))
-        self._theme_combo = QComboBox()
-        self._theme_combo.addItem("暗色 (Catppuccin Mocha)", "dark")
+        theme_layout.addWidget(QLabel(t("settings.label.theme")))
+        self._theme_combo = NoScrollComboBox()
+        self._theme_combo.addItem(t("settings.theme.dark"), "dark")
         self._theme_combo.setCurrentText(
-            "暗色 (Catppuccin Mocha)" if appearance_cfg.get("theme", "dark") == "dark"
-            else "暗色 (Catppuccin Mocha)"
+            t("settings.theme.dark") if appearance_cfg.get("theme", "dark") == "dark"
+            else t("settings.theme.dark")
         )
         self._theme_combo.setStyleSheet(self._combo_style())
         self._theme_combo.setFixedWidth(200)
@@ -902,29 +741,36 @@ class SettingsPanel(QDialog):
         theme_layout.addStretch()
         layout.addWidget(theme_row)
 
-        self._startup_cb = QCheckBox("开机自启")
+        self._startup_cb = QCheckBox(t("settings.checkbox.auto_start"))
         self._startup_cb.setChecked(general_cfg.get("start_with_windows", False))
         self._startup_cb.setStyleSheet("color: #cdd6f4;")
         layout.addWidget(self._startup_cb)
+        rl_setup = QLabel(t("settings.restart_required"))
+        rl_setup.setStyleSheet("color: #f9e2af; font-size: 10px; padding-left: 4px;")
+        layout.addWidget(rl_setup)
 
-        self._start_min_cb = QCheckBox("启动时最小化")
+        self._start_min_cb = QCheckBox(t("settings.checkbox.start_minimized"))
         self._start_min_cb.setChecked(general_cfg.get("start_minimized", False))
         self._start_min_cb.setStyleSheet("color: #cdd6f4;")
         layout.addWidget(self._start_min_cb)
 
-        self._auto_close_cb = QCheckBox("替换后自动关闭悬浮窗")
+        self._auto_close_cb = QCheckBox(t("settings.checkbox.auto_close"))
         self._auto_close_cb.setChecked(general_cfg.get("replace_auto_close", False))
         self._auto_close_cb.setStyleSheet("color: #cdd6f4;")
         layout.addWidget(self._auto_close_cb)
 
         layout.addSpacing(12)
-        layout.addWidget(QLabel("悬浮球设置"))
-        self._ball_opacity = self._add_entry(layout, "透明度 (0.1-1.0):", str(ball_cfg.get("opacity", 0.50)))
-        self._ball_size = self._add_entry(layout, "大小 (px):", str(ball_cfg.get("size", 30)))
+        layout.addWidget(QLabel(t("settings.section.ball")))
+        self._ball_opacity = self._add_entry(layout, t("settings.label.opacity"), str(ball_cfg.get("opacity", 0.50)))
+        self._ball_size = self._add_entry(layout, t("settings.label.ball_size"), str(ball_cfg.get("size", 30)))
+
+        restart_appear = QLabel(t("settings.restart_required"))
+        restart_appear.setStyleSheet("color: #f9e2af; font-size: 10px; padding-left: 4px;")
+        layout.addWidget(restart_appear)
 
         # ── Custom CSS section ──────────────────────────────────────────
         layout.addSpacing(12)
-        layout.addWidget(QLabel("自定义 CSS:"))
+        layout.addWidget(QLabel(t("settings.label.custom_css")))
         self._custom_css_editor = QTextEdit()
         self._custom_css_editor.setMinimumHeight(120)
         self._custom_css_editor.setMaximumHeight(200)
@@ -935,7 +781,7 @@ class SettingsPanel(QDialog):
             " border: 1px solid #45475a; border-radius: 6px;"
             " padding: 6px; font-family: Consolas; font-size: 11px; }"
         )
-        self._custom_css_editor.setPlaceholderText("/* 在此输入自定义 CSS ... */")
+        self._custom_css_editor.setPlaceholderText(t("settings.placeholder.css"))
         self._custom_css_editor.setPlainText(appearance_cfg.get("custom_css", ""))
         layout.addWidget(self._custom_css_editor)
 
@@ -950,14 +796,14 @@ class SettingsPanel(QDialog):
 
         btn_layout.addStretch()
 
-        validate_btn = QPushButton("验证")
-        validate_btn.setFixedSize(60, 26)
+        validate_btn = QPushButton(t("settings.btn.validate"))
+        validate_btn.setFixedSize(80, 26)
         validate_btn.setStyleSheet(self._small_btn_style())
         validate_btn.clicked.connect(self._on_validate_css)
         btn_layout.addWidget(validate_btn)
 
-        preview_btn = QPushButton("预览")
-        preview_btn.setFixedSize(60, 26)
+        preview_btn = QPushButton(t("settings.btn.preview"))
+        preview_btn.setFixedSize(80, 26)
         preview_btn.setStyleSheet(self._small_btn_style())
         preview_btn.clicked.connect(self._on_preview_css)
         btn_layout.addWidget(preview_btn)
@@ -972,10 +818,10 @@ class SettingsPanel(QDialog):
             " border-radius: 6px; padding: 8px; }"
         )
         preview_frame_layout = QVBoxLayout(self._preview_frame)
-        preview_label = QLabel("预览文本示例")
+        preview_label = QLabel(t("settings.preview.text"))
         preview_label.setStyleSheet("color: #cdd6f4; font-size: 12px; background: transparent;")
         preview_frame_layout.addWidget(preview_label)
-        preview_btn_sample = QPushButton("示例按钮")
+        preview_btn_sample = QPushButton(t("settings.preview.button"))
         preview_btn_sample.setFixedSize(80, 24)
         preview_btn_sample.setStyleSheet(
             "QPushButton { background: #6c5ce7; color: white; border: none;"
@@ -984,6 +830,7 @@ class SettingsPanel(QDialog):
         )
         preview_frame_layout.addWidget(preview_btn_sample)
         layout.addWidget(self._preview_frame)
+        self._preview_frame.hide()  # Hidden until Preview is clicked
 
         layout.addStretch()
 
@@ -1017,8 +864,8 @@ class SettingsPanel(QDialog):
                 try:
                     json.loads(extra_params_text)
                 except json.JSONDecodeError:
-                    QMessageBox.warning(self, "格式错误",
-                        f"\"{model_key}\" 模型的额外参数 JSON 格式无效，请检查后重试。")
+                    QMessageBox.warning(self, t("settings.dialog.format_error"),
+                        t("settings.error.invalid_json", model=model_key))
                     return
             data["models"][model_key] = {
                 "provider": provider_val if provider_val and provider_val != "custom" else e["provider_combo"].currentText(),
@@ -1029,19 +876,6 @@ class SettingsPanel(QDialog):
                 "max_tokens": int(e["max_tokens"].text() or "1024"),
                 "extra_params": extra_params_text,
             }
-
-        customs = []
-        for entry in self._custom_model_entries:
-            customs.append({
-                "provider": entry["provider"].text(),
-                "api_base": entry["api_base"].text(),
-                "api_key": entry["api_key"].text(),
-                "model_name": entry["model_name"].text(),
-                "temperature": float(entry["temperature"].text() or "0.3"),
-                "max_tokens": int(entry["max_tokens"].text() or "1024"),
-                "extra_params": entry.get("extra_params", QLineEdit("")).text(),
-            })
-        data["models"]["custom_models"] = customs
 
         data["general"]["optimize_model"] = self._assign_optimize_model.currentData()
         data["general"]["translate_model"] = self._assign_translate_model.currentData()
@@ -1061,7 +895,7 @@ class SettingsPanel(QDialog):
             not self._validate_hotkey(self._hk_toggle.text())
         )
         if hk_invalid:
-            QMessageBox.warning(self, "格式错误", "快捷键格式无效，请检查后重试。")
+            QMessageBox.warning(self, t("settings.dialog.format_error"), t("settings.error.invalid_hotkey"))
             return
 
         data["trigger"]["hotkey_trigger"] = self._hk_trigger.text()
@@ -1090,16 +924,73 @@ class SettingsPanel(QDialog):
         opens = css.count("{")
         closes = css.count("}")
         if opens == closes:
-            self._css_status_label.setText("\u2713 CSS 语法正确")
+            self._css_status_label.setText(t("settings.css.ok"))
             self._css_status_label.setStyleSheet("color: #a6e3a1; font-size: 11px;")
         else:
-            self._css_status_label.setText("\u2717 括号不匹配")
+            self._css_status_label.setText(t("settings.css.bracket_mismatch"))
             self._css_status_label.setStyleSheet("color: #f38ba8; font-size: 11px;")
 
     def _on_preview_css(self):
         css = self._custom_css_editor.toPlainText()
         if self._preview_frame:
             self._preview_frame.setStyleSheet(css)
+            self._preview_frame.show()
+
+    def _retranslate_ui(self):
+        """Re-apply translations after language change."""
+        self.setWindowTitle(t("settings.title"))
+        if hasattr(self, '_tabs'):
+            self._tabs.setTabText(0, t("settings.tab.models"))
+            self._tabs.setTabText(1, t("settings.tab.styles"))
+            self._tabs.setTabText(2, t("settings.tab.triggers"))
+            self._tabs.setTabText(3, t("settings.tab.appearance"))
+            self._tabs.setTabText(4, t("settings.tab.language"))
+
+    def _build_language_tab(self):
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.setSpacing(8)
+
+        desc = QLabel(t("settings.label.language_desc"))
+        desc.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        desc.setWordWrap(True)
+        layout.addWidget(desc)
+
+        lang_row = QWidget()
+        lang_rl = QHBoxLayout(lang_row)
+        lang_rl.setContentsMargins(0, 0, 0, 0)
+        lang_lbl = QLabel(t("settings.label.language"))
+        lang_lbl.setFixedWidth(120)
+        lang_lbl.setStyleSheet("color: #a6adc8;")
+        lang_rl.addWidget(lang_lbl)
+
+        self._lang_combo = NoScrollComboBox()
+        self._lang_combo.setFixedWidth(200)
+        self._lang_combo.setStyleSheet(self._combo_style())
+        for code, name in SUPPORTED_LANGUAGES.items():
+            self._lang_combo.addItem(name, code)
+        current_lang = get_language()
+        idx = self._lang_combo.findData(current_lang)
+        if idx >= 0:
+            self._lang_combo.setCurrentIndex(idx)
+        self._lang_combo.currentIndexChanged.connect(self._on_language_changed)
+        lang_rl.addWidget(self._lang_combo)
+        lang_rl.addStretch()
+        layout.addWidget(lang_row)
+
+        layout.addStretch()
+        scroll.setWidget(w)
+        return scroll
+
+    def _on_language_changed(self, idx):
+        if idx < 0:
+            return
+        lang_code = self._lang_combo.itemData(idx)
+        if lang_code:
+            set_language(lang_code)
 
     @staticmethod
     def _small_btn_style():
@@ -1116,14 +1007,14 @@ class SettingsPanel(QDialog):
     @staticmethod
     def _combo_style():
         return """
-            QComboBox { background: #181825; color: #cdd6f4; border: 1px solid #45475a;
+            NoScrollComboBox { background: #181825; color: #cdd6f4; border: 1px solid #45475a;
                         border-radius: 6px; padding: 6px 24px 6px 10px; font-size: 12px; }
-            QComboBox:hover { border-color: #6c5ce7; }
-            QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top right;
+            NoScrollComboBox:hover { border-color: #6c5ce7; }
+            NoScrollComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top right;
                                    width: 22px; border-left: 1px solid #45475a;
                                    border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
-            QComboBox::down-arrow { width: 10px; height: 10px; }
-            QComboBox QAbstractItemView { background: #181825; color: #cdd6f4;
+            NoScrollComboBox::down-arrow { width: 10px; height: 10px; }
+            NoScrollComboBox QAbstractItemView { background: #181825; color: #cdd6f4;
                                           selection-background-color: #6c5ce7;
                                           border: 1px solid #45475a; border-radius: 4px; }
         """

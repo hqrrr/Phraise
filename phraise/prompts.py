@@ -1,54 +1,54 @@
-SYSTEM_PROMPT_OPTIMIZE = """你是专业的写作助手。你会收到一段原文和用户选择的风格，
-请给出该风格下的三个不同改写版本。你必须严格返回 JSON。
+SYSTEM_PROMPT_OPTIMIZE = """You are a professional writing assistant. You will receive original text and a user-selected style. Provide three different rewrite versions in that style. You MUST return JSON strictly.
 
-**重要：必须保持原文的语言。绝对不要翻译成其他语言。**"""
+IMPORTANT: Preserve the original language. NEVER translate to another language."""
 
-USER_PROMPT_OPTIMIZE = """风格：{style}（{style_label}）
-原文：{original_text}
+USER_PROMPT_OPTIMIZE = """Style: {style} ({style_label})
+Original text: {original_text}
 
-请返回 JSON（不要 markdown 代码块）：
+Return JSON (no markdown code blocks):
 {{
   "grammar_issues": [
-    {{"original": "错误片段", "suggestion": "建议", "reason": "用中文解释原因",
-       "severity": "error或warning"}}
+    {{"original": "original", "suggestion": "suggestion", "reason": "explain the reason briefly",
+       "severity": "error or warning"}}
   ],
   "rewrites": [
-    {{"label": "版本 A", "text": "...", "note": "这一版的特点（用原文语言）"}},
-    {{"label": "版本 B", "text": "...", "note": "这一版的特点（用原文语言）"}},
-    {{"label": "版本 C", "text": "...", "note": "这一版的特点（用原文语言）"}}
+    {{"label": "Version A", "text": "...", "note": "characteristics of this version (in the original language)"}},
+    {{"label": "Version B", "text": "...", "note": "characteristics of this version (in the original language)"}},
+    {{"label": "Version C", "text": "...", "note": "characteristics of this version (in the original language)"}}
   ]
 }}
 
-三个版本应在同一风格下各有侧重（如：版本A最精简、版本B保留更多细节、
-版本C调整语序），让用户有真正不同的选择。
-注意：改写 text 和 note 必须使用与原文相同的语言，不要翻译。"""
+The three versions should have different emphases within the same style
+(e.g., Version A is most concise, Version B retains more detail,
+Version C adjusts word order), giving users genuinely different choices.
+Note: The rewrite text and note must use the same language as the original text. Do not translate."""
 
-SYSTEM_PROMPT_TRANSLATE = """你是专业多语言翻译助手。准确、自然。"""
+SYSTEM_PROMPT_TRANSLATE = """You are a professional multilingual translation assistant. Accurate and natural."""
 
-USER_PROMPT_TRANSLATE = """翻译为 {target_language}。原文（{source_language}）：
+USER_PROMPT_TRANSLATE = """Translate to {target_language}. Original ({source_language}):
 {original_text}
 
-返回 JSON：
+Return JSON:
 {{
-  "detected_source_language": "检测到的语言",
-  "translation": "主翻译结果"
+  "detected_source_language": "detected language",
+  "translation": "main translation result"
 }}"""
 
-SYSTEM_PROMPT_CUSTOM = """你是专业写作助手。必须保持原文的语言，不要翻译。"""
+SYSTEM_PROMPT_CUSTOM = """You are a professional writing assistant. Preserve the original language. Do not translate."""
 
-USER_PROMPT_CUSTOM = """对以下文本执行用户指令。
-原文：{original_text}
-指令：{custom_instruction}
+USER_PROMPT_CUSTOM = """Execute the user instruction on the following text.
+Original: {original_text}
+Instruction: {custom_instruction}
 
-返回 JSON：
+Return JSON:
 {{
-  "result": "处理后的文本"
+  "result": "processed text"
 }}
 
-注意：处理结果必须使用与原文相同的语言，不要翻译。"""
+Note: The result must use the same language as the original text. Do not translate."""
 
 STYLE_LABELS = {
-    "concise": "简洁",
-    "formal": "正式",
-    "natural": "流畅",
+    "concise": "Concise",
+    "formal": "Formal",
+    "natural": "Natural",
 }

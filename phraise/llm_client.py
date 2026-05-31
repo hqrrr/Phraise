@@ -7,6 +7,8 @@ import httpx
 from openai import OpenAI
 
 from .config import config
+from .i18n import t
+
 from .prompts import (
     SYSTEM_PROMPT_OPTIMIZE,
     SYSTEM_PROMPT_TRANSLATE,
@@ -68,10 +70,11 @@ def check_output_fit(
 
     threshold = int(max_tok * 0.85)
     if estimated_output > threshold:
-        return False, estimated_output, max_tok, (
-            f"输入文本较长（约{input_tok} tokens），"
-            f"预计输出约{estimated_output} tokens，超出设置{max_tok}。"
-            f"建议缩短文本或修改设置。"
+        return False, estimated_output, max_tok, t(
+            "llm.error.token_warning",
+            input_tok=input_tok,
+            estimated_output=estimated_output,
+            max_tok=max_tok,
         )
     return True, estimated_output, max_tok, ""
 
@@ -91,11 +94,6 @@ def _get_model_config(model_type: str = "fast") -> dict | None:
         return config.get("models", "fast")
     elif model_type == "quality":
         return config.get("models", "quality")
-    elif model_type.startswith("custom:"):
-        idx = int(model_type.split(":")[1])
-        customs = config.get("models", "custom_models", default=[])
-        if 0 <= idx < len(customs):
-            return customs[idx]
     return None
 
 
@@ -110,7 +108,7 @@ def _create_client(model_config: dict) -> OpenAI:
 def optimize_text(
     original_text: str,
     style: str = "concise",
-    style_label: str = "简洁",
+    style_label: str = "Concise",
     model_type: str = "fast",
     on_stream: Callable[[str], None] | None = None,
     on_done: Callable[[dict | None, str | None], None] | None = None,
@@ -118,12 +116,12 @@ def optimize_text(
     model_config = _get_model_config(model_type)
     if not model_config:
         if on_done:
-            on_done(None, "未找到模型配置，请在设置中检查。")
+            on_done(None, t("llm.error.no_config"))
         return
 
     if not model_config.get("api_key"):
         if on_done:
-            on_done(None, "API Key 未设置，请在设置中配置。")
+            on_done(None, t("llm.error.no_api_key"))
         return
 
     user_message = _safe_format(
@@ -152,12 +150,12 @@ def translate_text(
     model_config = _get_model_config(model_type)
     if not model_config:
         if on_done:
-            on_done(None, "未找到模型配置，请在设置中检查。")
+            on_done(None, t("llm.error.no_config"))
         return
 
     if not model_config.get("api_key"):
         if on_done:
-            on_done(None, "API Key 未设置，请在设置中配置。")
+            on_done(None, t("llm.error.no_api_key"))
         return
 
     user_message = _safe_format(
@@ -185,12 +183,12 @@ def custom_instruction(
     model_config = _get_model_config(model_type)
     if not model_config:
         if on_done:
-            on_done(None, "未找到模型配置，请在设置中检查。")
+            on_done(None, t("llm.error.no_config"))
         return
 
     if not model_config.get("api_key"):
         if on_done:
-            on_done(None, "API Key 未设置，请在设置中配置。")
+            on_done(None, t("llm.error.no_api_key"))
         return
 
     user_message = _safe_format(
@@ -303,23 +301,23 @@ def _try_parse_json(content: str) -> dict | None:
 def _handle_error(e: Exception) -> str:
     msg = str(e).lower()
     if "timeout" in msg or "timed out" in msg:
-        return "请求超时，请检查网络或切换模型"
+        return t("llm.error.timeout")
     if "401" in msg or "unauthorized" in msg or "invalid api key" in msg:
-        return "API Key 错误，请在设置中检查"
+        return t("llm.error.bad_api_key")
     if "402" in msg or "insufficient" in msg or "quota" in msg or "billing" in msg:
-        return "API 额度不足"
+        return t("llm.error.quota")
     if "connection" in msg or "connect" in msg or "network" in msg:
-        return "网络连接失败，请检查网络设置"
-    return f"请求出错：{str(e)[:200]}"
+        return t("llm.error.network")
+    return t("llm.error.request", detail=str(e)[:200])
 
 
 def test_connection(provider: str, api_base: str, api_key: str, model_name: str) -> tuple[bool, str]:
     if not api_key.strip():
-        return False, "API Key 未设置"
+        return False, t("llm.validate.no_api_key")
     if not api_base.strip():
-        return False, "API Base 未设置"
+        return False, t("llm.validate.no_api_base")
     if not model_name.strip():
-        return False, "模型名称未设置"
+        return False, t("llm.validate.no_model")
     try:
         client = OpenAI(
             api_key=api_key.strip(),
@@ -331,7 +329,7 @@ def test_connection(provider: str, api_base: str, api_key: str, model_name: str)
             messages=[{"role": "user", "content": "hi"}],
             max_tokens=10,
         )
-        return True, "连接成功"
+        return True, t("llm.status.connected")
     except Exception as e:
         return False, _handle_error(e)
 
