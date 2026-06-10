@@ -2,7 +2,7 @@ SYSTEM_PROMPT_OPTIMIZE = """You are a professional writing assistant. You will r
 
 IMPORTANT: Preserve the original language. NEVER translate to another language."""
 
-USER_PROMPT_OPTIMIZE = """Style: {style} ({style_label})
+USER_PROMPT_OPTIMIZE = """Style: {style} ({style_label}) — {prompt_keyword}
 Original text: {original_text}
 
 Return JSON (no markdown code blocks):

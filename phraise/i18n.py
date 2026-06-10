@@ -114,6 +114,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Rewrite Versions:",
         "zh-CN": "改写版本：",
     },
+    "fw.label.corrected_text": {
+        "en": "Corrected Text:",
+        "zh-CN": "修正后文本：",
+    },
+    "fw.label.harper_style_disabled": {
+        "en": "Style selection is for AI models only",
+        "zh-CN": "风格选择仅适用于 AI 模型",
+    },
     "fw.label.custom_instruction": {
         "en": "Custom Instruction:",
         "zh-CN": "自定义指令：",
@@ -227,6 +235,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "settings.model.two": {
         "en": "Model 2",
         "zh-CN": "模型二",
+    },
+    "settings.model.harper": {
+        "en": "Local (Harper)",
+        "zh-CN": "本地 (Harper)",
     },
     "settings.label.provider": {
         "en": "Provider:",
@@ -460,6 +472,30 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "UI Language:",
         "zh-CN": "界面语言：",
     },
+    "settings.section.harper": {
+        "en": "Harper Settings",
+        "zh-CN": "Harper 设置",
+    },
+    "settings.label.harper_dialect": {
+        "en": "English Dialect:",
+        "zh-CN": "英语方言：",
+    },
+    "harper.error.binary_not_found": {
+        "en": "Harper not available, using remote model.",
+        "zh-CN": "Harper 不可用，使用远程模型。",
+    },
+    "harper.error.process_crash": {
+        "en": "Harper process error, using remote model.",
+        "zh-CN": "Harper 进程错误，使用远程模型。",
+    },
+    "harper.error.timeout": {
+        "en": "Harper check timed out, using remote model.",
+        "zh-CN": "Harper 检查超时，使用远程模型。",
+    },
+    "harper.error.text_too_large": {
+        "en": "Text too large for local grammar check (>120KB). Using remote model.",
+        "zh-CN": "文本过大，超出本地语法检查限制(>120KB)。使用远程模型。",
+    },
     "settings.label.language_desc": {
         "en": "Changes take effect immediately across all windows.",
         "zh-CN": "更改会立即在所有窗口中生效。",
@@ -473,6 +509,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "llm.error.no_api_key": {
         "en": "API Key not set. Please configure in settings.",
         "zh-CN": "API Key 未设置，请在设置中配置。",
+    },
+    "llm.error.unknown_model_type": {
+        "en": "Unknown model type '{model_type}'. Please check settings.",
+        "zh-CN": "未知模型类型 '{model_type}'，请在设置中检查。",
     },
     "llm.error.timeout": {
         "en": "Request timed out. Please check network or switch model.",
@@ -493,6 +533,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "llm.error.request": {
         "en": "Request error: {detail}",
         "zh-CN": "请求出错：{detail}",
+    },
+    "llm.error.content_filter": {
+        "en": "Response was filtered by the provider's content policy.",
+        "zh-CN": "响应被提供商的内容策略过滤。",
+    },
+    "llm.error.empty_instruction": {
+        "en": "Instruction cannot be empty.",
+        "zh-CN": "指令不能为空。",
     },
     "llm.error.token_warning": {
         "en": (

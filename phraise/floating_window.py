@@ -887,6 +887,9 @@ class FloatingWindow(QWidget):
         )
         if not ok:
             self._show_toast(warning)
+            self._is_loading = False
+            self._set_loading_state(False)
+            return
 
         style_label = FloatingWindow._get_style_label(self._current_style)
 
@@ -974,6 +977,9 @@ class FloatingWindow(QWidget):
         )
         if not ok:
             self._show_toast(warning)
+            self._is_loading = False
+            self._set_loading_state(False)
+            return
 
         def on_done(result, error):
             run_on_main(lambda: self._on_translate_done(result, error))

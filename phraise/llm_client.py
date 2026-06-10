@@ -1,10 +1,19 @@
 import json
 import re
 import threading
+import time
 from collections.abc import Callable
 
 import httpx
-from openai import OpenAI
+from openai import (
+    APIError,
+    APIConnectionError,
+    APITimeoutError,
+    AuthenticationError,
+    BadRequestError,
+    OpenAI,
+    RateLimitError,
+)
 
 from .config import config
 from .i18n import t
@@ -38,6 +47,8 @@ def estimate_tokens(text: str) -> int:
     CJK characters ≈ 1.5 chars/token, others ≈ 4 chars/token.
     Accuracy: ±15% for mixed Chinese/English text.
     """
+    if not isinstance(text, str):
+        return 0
     if not text:
         return 0
     cjk = sum(1 for ch in text if _is_cjk(ch))
@@ -57,7 +68,7 @@ def check_output_fit(
     """
     model_config = _get_model_config(model_type)
     if not model_config:
-        return True, 0, 0, ""
+        return False, 0, 0, t("llm.error.unknown_model_type", model_type=model_type)
     max_tok = model_config.get("max_tokens", 4096)
     input_tok = estimate_tokens(input_text)
 
@@ -80,13 +91,13 @@ def check_output_fit(
 
 
 def _safe_format(template: str, **kwargs) -> str:
-    escaped = {}
-    for k, v in kwargs.items():
-        if isinstance(v, str):
-            escaped[k] = v.replace("{", "{{").replace("}", "}}")
-        else:
-            escaped[k] = v
-    return template.format(**escaped)
+    """Format a template string with keyword arguments.
+
+    Python's str.format() does NOT re-process braces in substituted
+    values — only braces in the template itself are interpreted as
+    format fields.  Therefore no escaping of kwargs is needed.
+    """
+    return template.format(**kwargs)
 
 
 def _get_model_config(model_type: str = "model_1") -> dict | None:
@@ -101,7 +112,7 @@ def _create_client(model_config: dict) -> OpenAI:
     return OpenAI(
         api_key=model_config.get("api_key", ""),
         base_url=model_config.get("api_base", ""),
-        timeout=httpx.Timeout(30.0),
+        timeout=httpx.Timeout(model_config.get("timeout", 30.0)),
     )
 
 
@@ -110,7 +121,6 @@ def optimize_text(
     style: str = "concise",
     style_label: str = "Concise",
     model_type: str = "model_1",
-    on_stream: Callable[[str], None] | None = None,
     on_done: Callable[[dict | None, str | None], None] | None = None,
 ):
     model_config = _get_model_config(model_type)
@@ -124,16 +134,23 @@ def optimize_text(
             on_done(None, t("llm.error.no_api_key"))
         return
 
+    prompt_keyword = style
+    for sc in config.get("styles", default=[]):
+        if sc.get("id") == style:
+            prompt_keyword = sc.get("prompt_keyword", style)
+            break
+
     user_message = _safe_format(
         USER_PROMPT_OPTIMIZE,
         style=style,
         style_label=style_label,
+        prompt_keyword=prompt_keyword,
         original_text=original_text,
     )
 
     thread = threading.Thread(
         target=_call_api,
-        args=(model_config, SYSTEM_PROMPT_OPTIMIZE, user_message, on_stream, on_done),
+        args=(model_config, SYSTEM_PROMPT_OPTIMIZE, user_message, on_done),
         daemon=True,
     )
     thread.start()
@@ -144,7 +161,6 @@ def translate_text(
     source_lang: str = "auto",
     target_lang: str = "zh-CN",
     model_type: str = "model_1",
-    on_stream: Callable[[str], None] | None = None,
     on_done: Callable[[dict | None, str | None], None] | None = None,
 ):
     model_config = _get_model_config(model_type)
@@ -167,7 +183,7 @@ def translate_text(
 
     thread = threading.Thread(
         target=_call_api,
-        args=(model_config, SYSTEM_PROMPT_TRANSLATE, user_message, on_stream, on_done),
+        args=(model_config, SYSTEM_PROMPT_TRANSLATE, user_message, on_done),
         daemon=True,
     )
     thread.start()
@@ -177,9 +193,13 @@ def custom_instruction(
     original_text: str,
     instruction: str,
     model_type: str = "model_1",
-    on_stream: Callable[[str], None] | None = None,
     on_done: Callable[[dict | None, str | None], None] | None = None,
 ):
+    if not instruction or not instruction.strip():
+        if on_done:
+            on_done(None, t("llm.error.empty_instruction"))
+        return
+
     model_config = _get_model_config(model_type)
     if not model_config:
         if on_done:
@@ -199,7 +219,7 @@ def custom_instruction(
 
     thread = threading.Thread(
         target=_call_api,
-        args=(model_config, SYSTEM_PROMPT_CUSTOM, user_message, on_stream, on_done),
+        args=(model_config, SYSTEM_PROMPT_CUSTOM, user_message, on_done),
         daemon=True,
     )
     thread.start()
@@ -209,38 +229,83 @@ def _call_api(
     model_config: dict,
     system_prompt: str,
     user_message: str,
-    on_stream: Callable[[str], None] | None,
     on_done: Callable[[dict | None, str | None], None] | None,
 ):
+    client = _create_client(model_config)
+    max_retries = 3
+    delays = [1.0, 2.0, 4.0]
+
+    extra_params_raw = model_config.get("extra_params", "{}")
+    extra_params: dict = {}
+    if extra_params_raw:
+        try:
+            extra_params = json.loads(extra_params_raw)
+        except json.JSONDecodeError:
+            pass
+
+    for attempt in range(max_retries):
+        try:
+            response = client.chat.completions.create(
+                model=model_config.get("model_name", ""),
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message},
+                ],
+                temperature=model_config.get("temperature", 0.3),
+                max_tokens=model_config.get("max_tokens", 1024),
+                **extra_params,
+            )
+
+            finish_reason = response.choices[0].finish_reason or ""
+
+            if finish_reason == "content_filter":
+                if on_done:
+                    on_done(None, t("llm.error.content_filter"))
+                return
+
+            content = response.choices[0].message.content or ""
+            parsed = _parse_json_response(content)
+
+            if parsed is None:
+                if on_done:
+                    on_done(None, content)
+            else:
+                if finish_reason == "length":
+                    parsed["_truncated"] = True
+                if on_done:
+                    on_done(parsed, None)
+            return
+
+        except RateLimitError as e:
+            if attempt < max_retries - 1:
+                retry_after = _get_retry_after(e)
+                delay = retry_after if retry_after is not None else delays[attempt]
+                time.sleep(delay)
+                continue
+            error_msg = _handle_error(e)
+            if on_done:
+                on_done(None, error_msg)
+            return
+
+        except Exception as e:
+            error_msg = _handle_error(e)
+            if on_done:
+                on_done(None, error_msg)
+            return
+
+
+def _get_retry_after(exc: RateLimitError) -> float | None:
     try:
-        client = _create_client(model_config)
-        response = client.chat.completions.create(
-            model=model_config.get("model_name", ""),
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ],
-            temperature=model_config.get("temperature", 0.3),
-            max_tokens=model_config.get("max_tokens", 1024),
-        )
-
-        content = response.choices[0].message.content or ""
-        finish_reason = response.choices[0].finish_reason or ""
-        parsed = _parse_json_response(content)
-
-        if parsed is None:
-            if on_done:
-                on_done(None, content)
-        else:
-            if finish_reason == "length":
-                parsed["_truncated"] = True
-            if on_done:
-                on_done(parsed, None)
-
-    except Exception as e:
-        error_msg = _handle_error(e)
-        if on_done:
-            on_done(None, error_msg)
+        response = getattr(exc, "response", None)
+        if response is None:
+            return None
+        headers = getattr(response, "headers", {})
+        val = headers.get("Retry-After") or headers.get("retry-after")
+        if val is None:
+            return None
+        return float(val)
+    except (TypeError, ValueError, AttributeError):
+        return None
 
 
 def _parse_json_response(content: str) -> dict | None:
@@ -260,8 +325,6 @@ def _parse_json_response(content: str) -> dict | None:
 
 
 def _try_parse_json(content: str) -> dict | None:
-    best = None
-    best_len = 0
     for match in re.finditer(r'\{', content):
         start = match.start()
         depth = 0
@@ -289,25 +352,26 @@ def _try_parse_json(content: str) -> dict | None:
         if end >= 0:
             try:
                 obj = json.loads(content[start:end + 1])
-                obj_len = end - start + 1
-                if obj_len > best_len:
-                    best = obj
-                    best_len = obj_len
+                return obj
             except json.JSONDecodeError:
                 pass
-    return best
+    return None
 
 
 def _handle_error(e: Exception) -> str:
-    msg = str(e).lower()
-    if "timeout" in msg or "timed out" in msg:
+    """Map OpenAI SDK exception types to user-facing error messages."""
+    if isinstance(e, APITimeoutError):
         return t("llm.error.timeout")
-    if "401" in msg or "unauthorized" in msg or "invalid api key" in msg:
+    if isinstance(e, AuthenticationError):
         return t("llm.error.bad_api_key")
-    if "402" in msg or "insufficient" in msg or "quota" in msg or "billing" in msg:
+    if isinstance(e, RateLimitError):
         return t("llm.error.quota")
-    if "connection" in msg or "connect" in msg or "network" in msg:
+    if isinstance(e, APIConnectionError):
         return t("llm.error.network")
+    if isinstance(e, BadRequestError):
+        return t("llm.error.request", detail=str(e)[:200])
+    if isinstance(e, APIError):
+        return t("llm.error.request", detail=str(e)[:200])
     return t("llm.error.request", detail=str(e)[:200])
 
 
@@ -324,7 +388,7 @@ def test_connection(provider: str, api_base: str, api_key: str, model_name: str)
             base_url=api_base.strip(),
             timeout=httpx.Timeout(10.0),
         )
-        response = client.chat.completions.create(
+        client.chat.completions.create(
             model=model_name.strip(),
             messages=[{"role": "user", "content": "hi"}],
             max_tokens=10,
