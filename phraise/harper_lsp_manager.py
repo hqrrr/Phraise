@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QProcess, QTimer, Signal
 
-from phraise.harper_types import LspRange, build_did_open_notification, build_exit_notification, build_initialized_notification, build_initialize_request, build_shutdown_request, parse_publish_diagnostics
+from phraise.harper_types import LspRange, build_did_open_notification, build_exit_notification, build_initialized_notification, build_initialize_request, build_register_capability_response, build_shutdown_request, build_workspace_config_response, parse_publish_diagnostics
 
 
 class HarperLspManager(QObject):
@@ -30,6 +30,7 @@ class HarperLspManager(QObject):
     diagnostics_ready = Signal(list)  # list[LspDiagnostic]
     error_occurred = Signal(str)  # error message
     process_finished = Signal(int)  # exit code
+    server_ready = Signal()  # emitted after initialize→initialized handshake
 
     def __init__(
         self,
@@ -55,6 +56,8 @@ class HarperLspManager(QObject):
         self._binary_path = str(binary_path)
         self._process = QProcess(self)
         self._request_id = 0
+        self._initialize_request_id = 0
+        self._initialized = False
         self._buffer = b""
         self._timeout_secs = timeout_secs
         self._pending_request = False
@@ -77,23 +80,26 @@ class HarperLspManager(QObject):
         self._process.start(self._binary_path, ["--stdio"])
 
     def initialize(self) -> None:
-        """Send LSP ``initialize`` request and ``initialized`` notification.
+        """Send LSP ``initialize`` request.
 
-        Sends the ``initialize`` request first, then immediately sends the
-        ``initialized`` notification.  In the full LSP handshake (Task 7-8),
-        the notification should be sent after receiving the server's
-        ``initialize`` response — the current implementation wires the call.
+        The ``initialized`` notification is sent automatically by the stdout
+        reader when the server's response is received.  Callers should NOT
+        invoke this method directly during normal operation — the startup
+        flow is driven by ``QProcess.started`` → ``_on_process_started``.
         """
         self._request_id += 1
+        self._initialize_request_id = self._request_id
         msg = build_initialize_request(self._request_id)
         self._write_message(msg)
-        self._write_message(build_initialized_notification())
 
     def send_text(self, text: str, language_id: str = "plaintext") -> None:
         """Send ``textDocument/didOpen`` notification with the given text.
 
+        Guards against writing to a process that is not yet running.
         Starts the response timeout timer.
         """
+        if self._process.state() != QProcess.Running:
+            return
         msg = build_did_open_notification(text, language_id=language_id)
         self._write_message(msg)
         self._pending_request = True
@@ -222,6 +228,25 @@ class HarperLspManager(QObject):
             except json.JSONDecodeError:
                 continue  # skip malformed JSON
 
+            # -- Server requests that block diagnostics until responded to --
+            req_id = msg.get("id")
+            method = msg.get("method")
+            is_request = req_id is not None and method is not None
+
+            if is_request and method == "workspace/configuration":
+                self._write_message(build_workspace_config_response(req_id))
+                continue
+            if is_request and method == "client/registerCapability":
+                self._write_message(build_register_capability_response(req_id))
+                continue
+
+            # -- Response to our initialize request --
+            if req_id == self._initialize_request_id and "result" in msg and not self._initialized:
+                self._write_message(build_initialized_notification())
+                self._initialized = True
+                self.server_ready.emit()
+
+            # -- Diagnostics notification --
             if msg.get("method") == "textDocument/publishDiagnostics":
                 diags = parse_publish_diagnostics(msg)
                 if diags:
@@ -232,7 +257,11 @@ class HarperLspManager(QObject):
     # ------------------------------------------------------------------
 
     def _on_process_started(self) -> None:
-        """Callback when the LSP subprocess starts (no-op)."""
+        """Send the LSP ``initialize`` request as soon as the process starts."""
+        self._request_id += 1
+        self._initialize_request_id = self._request_id
+        msg = build_initialize_request(self._request_id)
+        self._write_message(msg)
 
     def _on_process_error(self, error: QProcess.ProcessError) -> None:
         """Emit ``error_occurred`` when the subprocess encounters an error."""
