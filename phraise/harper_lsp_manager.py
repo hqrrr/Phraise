@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QProcess, QTimer, Signal
 
-from phraise.harper_types import LspRange, build_did_open_notification, build_exit_notification, build_initialized_notification, build_initialize_request, build_shutdown_request
+from phraise.harper_types import LspRange, build_did_open_notification, build_exit_notification, build_initialized_notification, build_initialize_request, build_shutdown_request, parse_publish_diagnostics
 
 
 class HarperLspManager(QObject):
@@ -65,6 +65,7 @@ class HarperLspManager(QObject):
         self._process.started.connect(self._on_process_started)
         self._process.errorOccurred.connect(self._on_process_error)
         self._process.finished.connect(self._on_process_finished)
+        self._process.readyReadStandardOutput.connect(self._on_stdout_ready)
         self._timeout_timer.timeout.connect(self._on_timeout)
 
     # ------------------------------------------------------------------
@@ -149,6 +150,7 @@ class HarperLspManager(QObject):
         self._process.started.disconnect(self._on_process_started)
         self._process.errorOccurred.disconnect(self._on_process_error)
         self._process.finished.disconnect(self._on_process_finished)
+        self._process.readyReadStandardOutput.disconnect(self._on_stdout_ready)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -162,6 +164,68 @@ class HarperLspManager(QObject):
         body = json.dumps(msg, ensure_ascii=False).encode("utf-8")
         header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
         self._process.write(header + body)
+
+    def _on_stdout_ready(self) -> None:
+        """Read available stdout data from the LSP subprocess.
+
+        Appends all newly-available bytes to ``self._buffer`` and
+        attempts to decode complete Content-Length frames.
+        """
+        data = bytes(self._process.readAllStandardOutput())
+        if not data:
+            return
+        self._buffer += data
+        self._decode_frames()
+
+    def _decode_frames(self) -> None:
+        """Decode complete LSP frames from ``self._buffer``.
+
+        Parses Content-Length headers, extracts JSON bodies, and for
+        ``textDocument/publishDiagnostics`` notifications emits the
+        ``diagnostics_ready`` signal.
+
+        Handles:
+        - Single frame in one chunk
+        - Split header/body across multiple chunks
+        - Multiple frames in one chunk
+        """
+        while True:
+            idx = self._buffer.find(b"\r\n\r\n")
+            if idx == -1:
+                return  # header not yet complete
+
+            header_part = self._buffer[:idx]
+            content_length = 0
+            for line in header_part.split(b"\r\n"):
+                if line.lower().startswith(b"content-length:"):
+                    try:
+                        content_length = int(line.split(b":", 1)[1].strip())
+                    except ValueError:
+                        pass  # malformed header — discard and continue
+
+            if content_length <= 0:
+                # No valid Content-Length; skip past the separator
+                self._buffer = self._buffer[idx + 4:]
+                continue
+
+            body_start = idx + 4
+            body_end = body_start + content_length
+
+            if len(self._buffer) < body_end:
+                return  # body not fully received yet
+
+            body = self._buffer[body_start:body_end]
+            self._buffer = self._buffer[body_end:]
+
+            try:
+                msg = json.loads(body)
+            except json.JSONDecodeError:
+                continue  # skip malformed JSON
+
+            if msg.get("method") == "textDocument/publishDiagnostics":
+                diags = parse_publish_diagnostics(msg)
+                if diags:
+                    self.diagnostics_ready.emit(diags)
 
     # ------------------------------------------------------------------
     # Signal handlers
