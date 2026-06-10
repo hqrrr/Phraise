@@ -142,7 +142,10 @@ class HarperLspManager(QObject):
 
         Sends ``shutdown`` + ``exit``, terminates the QProcess, waits up
         to 3 seconds for it to finish, then disconnects all signals.
+        Idempotent — calling ``stop()`` multiple times is safe.
         """
+        self._timeout_timer.stop()
+
         # Send shutdown request
         self._request_id += 1
         self._write_message(build_shutdown_request(self._request_id))
@@ -152,11 +155,16 @@ class HarperLspManager(QObject):
         if self._process.state() != QProcess.NotRunning:
             self._process.terminate()
             self._process.waitForFinished(3000)
-        # Disconnect signals
-        self._process.started.disconnect(self._on_process_started)
-        self._process.errorOccurred.disconnect(self._on_process_error)
-        self._process.finished.disconnect(self._on_process_finished)
-        self._process.readyReadStandardOutput.disconnect(self._on_stdout_ready)
+        for signal_name, slot in (
+            ("started", self._on_process_started),
+            ("errorOccurred", self._on_process_error),
+            ("finished", self._on_process_finished),
+            ("readyReadStandardOutput", self._on_stdout_ready),
+        ):
+            try:
+                getattr(self._process, signal_name).disconnect(slot)
+            except (RuntimeError, TypeError):
+                pass
 
     # ------------------------------------------------------------------
     # Internal helpers

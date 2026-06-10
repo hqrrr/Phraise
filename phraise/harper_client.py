@@ -6,6 +6,8 @@ into a convenient API for use by the rest of the application.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from phraise.harper_lsp_manager import HarperLspManager
@@ -22,7 +24,34 @@ __all__ = [
     "HarperClient",
     "HarperDiagnosticsParser",
     "HarperFixApplier",
+    "LintResult",
 ]
+
+
+@dataclass
+class LintResult:
+    """Result of a Harper grammar check.
+
+    Attributes
+    ----------
+    success : bool
+        ``True`` when the check completed without errors and produced
+        grammar issues (if any).  ``False`` when the Harper process
+        crashed, timed out, or the binary could not be found.
+    issues : list[HarperIssue]
+        Grammar issues discovered by Harper.  Empty list when no issues
+        were found or when the check failed.
+    corrected_text : str
+        Text with Harper's auto-applied corrections.  Same as the
+        original text when no corrections were applied.
+    error : str
+        Error message when ``success`` is ``False``.  Empty string on
+        success.
+    """
+    success: bool
+    issues: list = field(default_factory=list)
+    corrected_text: str = ""
+    error: str = ""
 
 
 class HarperClient(QObject):
@@ -34,13 +63,13 @@ class HarperClient(QObject):
 
     Signals
     -------
-    finished : Signal(list, str, str)
+    finished : Signal(LintResult)
         Emitted when the check completes or fails.
-        Arguments: ``(issues: list[HarperIssue], corrected_text: str,
-        error_message: str)``.
+        Carries a :class:`LintResult` with ``success``, ``issues``,
+        ``corrected_text``, and ``error`` fields.
     """
 
-    finished = Signal(list, str, str)
+    finished = Signal(LintResult)
 
     # Class-level registry of active instances for cleanup on app exit
     _active_instances: list = []
@@ -77,7 +106,9 @@ class HarperClient(QObject):
         binary_path = get_harper_binary_path()
         if binary_path is None:
             error_msg = t("harper.error.binary_not_found")
-            self.finished.emit([], text, error_msg)
+            self.finished.emit(
+                LintResult(success=False, issues=[], corrected_text=text, error=error_msg)
+            )
             return [], text
 
         try:
@@ -100,7 +131,9 @@ class HarperClient(QObject):
             self._timeout_timer.start(self._timeout_secs * 1000)
 
         except Exception as e:
-            self.finished.emit([], text, str(e))
+            self.finished.emit(
+                LintResult(success=False, issues=[], corrected_text=text, error=str(e))
+            )
             self._manager = None
 
         return [], text
@@ -140,11 +173,17 @@ class HarperClient(QObject):
             diagnostics, self._current_text
         )
         corrected = self._current_text
-        self.finished.emit(issues, corrected, "")
+        self.finished.emit(
+            LintResult(success=True, issues=issues, corrected_text=corrected, error="")
+        )
 
     def _on_error(self, error_msg: str):
         self._timeout_timer.stop()
-        self.finished.emit([], self._current_text, error_msg)
+        self.finished.emit(
+            LintResult(
+                success=False, issues=[], corrected_text=self._current_text, error=error_msg
+            )
+        )
 
     def _on_client_timeout(self):
         self._on_error(t("harper.error.timeout"))

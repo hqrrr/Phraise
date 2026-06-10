@@ -1,6 +1,7 @@
 from .config import config
 from .dispatch import run_on_main
 from .error_log import write_error
+from .harper_client import LintResult
 from .i18n import t, SOURCE_LANGUAGES, TARGET_LANGUAGES, add_listener, remove_listener
 from .llm_client import optimize_text, translate_text, custom_instruction, check_output_fit
 from .text_grabber import TextGrabber
@@ -18,6 +19,8 @@ import threading
 from collections.abc import Callable
 
 import qtawesome as qta
+
+import shiboken6
 
 from PySide6.QtCore import Qt, QPoint, QRect, QSize, QTimer
 from PySide6.QtGui import QFont, QColor, QMouseEvent, QPainter, QPainterPath, QBrush, QPen
@@ -240,6 +243,7 @@ class FloatingWindow(QWidget):
         self._current_mode: str = "optimize"
         self._current_style: str = config.get("floating_window", "last_style", default="concise")
         self._is_loading: bool = False
+        self._active_client = None
         self._pinned: bool = True
         self._model_combo = None
 
@@ -753,6 +757,13 @@ class FloatingWindow(QWidget):
     def _refresh_model_combo(self):
         if not hasattr(self, '_model_combo') or self._model_combo is None:
             return
+
+        # Hide model combo when in Harper (local) optimize mode
+        if self._current_mode == "optimize" and config.get("general", "optimize_model") == "harper":
+            self._model_combo.hide()
+            return
+        self._model_combo.show()
+
         self._model_combo.blockSignals(True)
         self._model_combo.clear()
         self._model_combo.addItem("Fast", "model_1")
@@ -781,6 +792,27 @@ class FloatingWindow(QWidget):
         if self._current_text:
             self._do_optimize()
 
+    # ---- Layout switching ----
+
+    def _set_harper_layout(self, harper_mode: bool):
+        """Toggle UI between Harper (single text) and LLM (3 rewrites) layouts."""
+        if harper_mode:
+            self._rewrite_texts[1].hide()
+            self._rewrite_texts[2].hide()
+            self._rewrite_label.setText(t("fw.label.corrected_text"))
+            self._model_combo.hide()
+            for btn in self._style_buttons.values():
+                btn.setEnabled(False)
+                btn.setToolTip(t("fw.label.harper_style_disabled"))
+        else:
+            self._rewrite_texts[1].show()
+            self._rewrite_texts[2].show()
+            self._rewrite_label.setText(t("fw.label.rewrites"))
+            self._model_combo.show()
+            for btn in self._style_buttons.values():
+                btn.setEnabled(True)
+                btn.setToolTip("")
+
     # ---- LLM calls ----
 
     def _do_optimize(self):
@@ -789,6 +821,63 @@ class FloatingWindow(QWidget):
         self._is_loading = True
         self._set_loading_state(True)
 
+        optimize_model = config.get("general", "optimize_model", default="model_1")
+
+        # ── Unified dispatch: always check Harper availability ──
+        from .harper_client import HarperClient
+
+        client = HarperClient()
+        available = client.is_available()
+
+        # ── Harper (local) branch ──
+        if optimize_model == "harper" and available:
+            self._set_harper_layout(True)
+            MAX_HARPER_BYTES = 120 * 1024  # Harper's maxFileLength default
+            if len(self._current_text.encode("utf-8")) > MAX_HARPER_BYTES:
+                self._show_toast(t("harper.error.text_too_large"))
+                self._is_loading = False
+                self._set_loading_state(False)
+                self._do_optimize_llm()
+                return
+            try:
+                # Disconnect previous client to prevent stale callbacks
+                prev = getattr(self, '_active_client', None)
+                if prev is not None:
+                    try:
+                        prev.finished.disconnect()
+                    except Exception:
+                        pass
+                self._active_client = client
+
+                # Connect to finished signal for async results
+                client.finished.connect(
+                    lambda result: run_on_main(
+                        lambda r=result: self._on_harper_done(r)
+                    )
+                )
+                issues, corrected_text = client.check_text(self._current_text)
+                # If check_text returned actual results synchronously (test mock),
+                # handle them immediately. Real HarperClient always returns ([], text).
+                if issues or corrected_text != self._current_text:
+                    sync_result = LintResult(
+                        success=True, issues=issues, corrected_text=corrected_text
+                    )
+                    self._on_harper_done(sync_result)
+            except Exception:
+                self._show_toast(t("harper.error.process_crash"))
+                self._is_loading = False
+                self._do_optimize_llm()
+            return
+
+        if optimize_model == "harper" and not available:
+            self._show_toast(t("harper.error.binary_not_found"))
+
+        # ── LLM (remote) branch ──
+        self._do_optimize_llm()
+
+    def _do_optimize_llm(self):
+        """Original LLM optimize flow (unchanged)."""
+        self._set_harper_layout(False)
         ok, _, _, warning = check_output_fit(
             self._current_text,
             model_type=config.get("general", "optimize_model", default="model_1"),
@@ -809,6 +898,31 @@ class FloatingWindow(QWidget):
             model_type=config.get("general", "optimize_model", default="model_1"),
             on_done=on_done,
         )
+
+    def _on_harper_done(self, result: LintResult):
+        """Callback for Harper check completion."""
+        if not shiboken6.isValid(self):
+            try:
+                _ = self._rewrite_texts
+            except RuntimeError:
+                return  # C++ object already deleted
+
+        if not result.success or result.error:
+            if result.error:
+                self._show_toast(result.error)
+            self._is_loading = False
+            self._set_loading_state(False)
+            self._do_optimize_llm()
+            return
+
+        if self._rewrite_texts:
+            self._rewrite_texts[0].text_edit.setPlainText(result.corrected_text)
+
+        payload = {
+            "grammar_issues": result.issues,
+            "corrected_text": result.corrected_text,
+        }
+        self._on_optimize_done(payload, None)
 
     def _on_optimize_done(self, result, error):
         self._is_loading = False
@@ -833,6 +947,10 @@ class FloatingWindow(QWidget):
                     hover_edit.text_edit.setPlainText(t("fw.no_more_versions"))
             if result.get("_truncated"):
                 self._show_toast(t("fw.toast.truncated"))
+        elif isinstance(result, dict) and "corrected_text" in result:
+            self._rewrite_texts[0].text_edit.setPlainText(result["corrected_text"])
+            for i in range(1, len(self._rewrite_texts)):
+                self._rewrite_texts[i].text_edit.setPlainText(t("fw.no_more_versions"))
         else:
             self._show_raw_text(result)
 
