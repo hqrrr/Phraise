@@ -23,7 +23,7 @@ import qtawesome as qta
 import shiboken6
 
 from PySide6.QtCore import Qt, QPoint, QRect, QSize, QTimer
-from PySide6.QtGui import QFont, QColor, QMouseEvent, QPainter, QPainterPath, QBrush, QPen
+from PySide6.QtGui import QFont, QColor, QHideEvent, QMouseEvent, QPainter, QPainterPath, QBrush, QPen
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QTabWidget, QScrollArea, QTextEdit, QComboBox,
@@ -62,10 +62,6 @@ class FlowLayout(QLayout):
         self._items: list = []
         self._spacing = spacing
         self.setContentsMargins(margin, margin, margin, margin)
-
-    def __del__(self):
-        while self.count():
-            self.takeAt(0)
 
     def addItem(self, item):
         self._items.append(item)
@@ -168,6 +164,12 @@ class _DragBar(QWidget):
             event.accept()
         else:
             super().mouseReleaseEvent(event)
+
+    def hideEvent(self, event: QHideEvent):
+        if self._dragging:
+            self._dragging = False
+            self.releaseMouse()
+        super().hideEvent(event)
 
 
 class _HoverTextEdit(QWidget):
@@ -348,9 +350,9 @@ class FloatingWindow(QWidget):
         overlay_layout.addWidget(self._loading_label)
 
     def _build_titlebar(self, layout: QVBoxLayout):
-        bar = _DragBar(self, self._titlebar_height)
-        bar.setStyleSheet(titlebar_style(theme, self._radius))
-        bar_layout = QHBoxLayout(bar)
+        self._drag_bar = _DragBar(self, self._titlebar_height)
+        self._drag_bar.setStyleSheet(titlebar_style(theme, self._radius))
+        bar_layout = QHBoxLayout(self._drag_bar)
         bar_layout.setContentsMargins(12, 0, 4, 0)
 
         title = QLabel("PhrAIse")
@@ -400,7 +402,7 @@ class FloatingWindow(QWidget):
         bar_layout.addWidget(close_btn)
         self._pin_btn = pin_btn
 
-        layout.addWidget(bar)
+        layout.addWidget(self._drag_bar)
 
     def _build_tabs(self, layout: QVBoxLayout):
         self._tabs = QTabWidget()
@@ -925,6 +927,11 @@ class FloatingWindow(QWidget):
         self._on_optimize_done(payload, None)
 
     def _on_optimize_done(self, result, error):
+        if not shiboken6.isValid(self):
+            try:
+                _ = self._rewrite_texts
+            except RuntimeError:
+                return  # C++ object already deleted
         self._is_loading = False
         self._set_loading_state(False)
         for hover_edit in self._rewrite_texts:
@@ -980,6 +987,11 @@ class FloatingWindow(QWidget):
         )
 
     def _on_translate_done(self, result, error):
+        if not shiboken6.isValid(self):
+            try:
+                _ = self._translation_text
+            except RuntimeError:
+                return  # C++ object already deleted
         self._is_loading = False
         self._set_loading_state(False)
         if error:
@@ -1006,6 +1018,11 @@ class FloatingWindow(QWidget):
         )
 
     def _on_custom_done(self, result, error):
+        if not shiboken6.isValid(self):
+            try:
+                _ = self._rewrite_texts
+            except RuntimeError:
+                return  # C++ object already deleted
         self._is_loading = False
         self._set_loading_state(False)
         if error:
@@ -1051,10 +1068,11 @@ class FloatingWindow(QWidget):
     def _show_toast(self, message: str):
         toast = QLabel(message, self)
         toast.setStyleSheet(toast_style(theme))
+        toast.setAttribute(Qt.WA_DeleteOnClose, True)
         toast.adjustSize()
         toast.move((self.width() - toast.width()) // 2, self.height() - 40)
         toast.show()
-        QTimer.singleShot(1500, toast.deleteLater)
+        QTimer.singleShot(1500, lambda: toast.close() if shiboken6.isValid(toast) else None)
 
     def _show_error(self, message: str):
         for hover_edit in self._rewrite_texts:
@@ -1095,6 +1113,10 @@ class FloatingWindow(QWidget):
 
     def _close(self):
         self._save_geometry()
+        # Release mouse grab if DragBar is mid-drag to avoid permanent global grab
+        if hasattr(self, '_drag_bar') and self._drag_bar._dragging:
+            self._drag_bar.releaseMouse()
+            self._drag_bar._dragging = False
         self.hide()
         if self._on_close:
             self._on_close()
@@ -1107,17 +1129,17 @@ class FloatingWindow(QWidget):
             "height": self.height(),
         })
 
-    def destroy(self):
+    def cleanup(self):
         remove_listener(self._retranslate_ui)
         try:
             self._save_geometry()
         except Exception as e:
-            write_error(e, "FloatingWindow.destroy:save_geometry")
+            write_error(e, "FloatingWindow.cleanup:save_geometry")
             pass
         try:
             self.hide()
         except Exception as e:
-            write_error(e, "FloatingWindow.destroy:hide")
+            write_error(e, "FloatingWindow.cleanup:hide")
             pass
         super().deleteLater()
 
@@ -1168,7 +1190,7 @@ class FloatingWindow(QWidget):
     def after(self, ms: int, callback: Callable):
         QTimer.singleShot(ms, callback)
 
-    def update(self):
+    def process_events(self):
         QApplication.processEvents()
 
     lift = lift_widget
