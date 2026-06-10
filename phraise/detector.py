@@ -29,7 +29,7 @@ class Detector:
 
     def _poll_loop(self):
         import pythoncom
-        pythoncom.CoInitialize()
+        pythoncom.CoInitializeEx(pythoncom.COINIT_MULTITHREADED)
         try:
             last_active_text = ""
 

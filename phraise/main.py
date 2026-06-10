@@ -27,9 +27,18 @@ class PhrAIseApp:
         self._running = True
 
     def run(self):
-        self._init_ball()
-        self._init_tray()
-        self._init_hotkeys()
+        try:
+            self._init_ball()
+        except Exception as e:
+            write_error(e, "run:_init_ball")
+        try:
+            self._init_tray()
+        except Exception as e:
+            write_error(e, "run:_init_tray")
+        try:
+            self._init_hotkeys()
+        except Exception as e:
+            write_error(e, "run:_init_hotkeys")
         QApplication.instance().exec()
 
     def _init_ball(self):
@@ -126,21 +135,24 @@ class PhrAIseApp:
         dlg.exec()
 
     def _hotkey_trigger(self):
-        import pythoncom
-        pythoncom.CoInitialize()
         try:
+            import pythoncom
+            pythoncom.CoInitializeEx(pythoncom.COINIT_MULTITHREADED)
             selected = self._grabber.get_selected_text()
             run_on_main(lambda: self._on_trigger_dispatch(selected))
         except Exception as e:
             write_error(e, "_hotkey_trigger")
         finally:
-            pythoncom.CoUninitialize()
+            try:
+                pythoncom.CoUninitialize()
+            except NameError:
+                pass
 
     def _on_trigger_dispatch(self, selected: str):
         self._grabber.capture_foreground()
         window_open = self._window is not None and self._window.isVisible()
         if window_open:
-            mode = self._window._current_mode
+            mode = self._window.current_mode
         else:
             mode = "optimize"
 
@@ -154,7 +166,11 @@ class PhrAIseApp:
     def _quit_app(self):
         remove_listener(self._rebuild_menus)
         self._running = False
-        hotkey_manager.stop()
+        try:
+            hotkey_manager.stop()
+        except Exception as e:
+            write_error(e, "_quit_app:hotkey_stop")
+            pass
         try:
             if self._window:
                 self._window.hide()
@@ -197,6 +213,17 @@ def main():
     import multiprocessing
     multiprocessing.freeze_support()
 
+    # Initialize COM MTA on the main Qt thread so UIA operations
+    # (capture_foreground, focus_foreground, replace_text) work when
+    # dispatched to the main thread via run_on_main().
+    import sys as _sys
+    if _sys.platform == "win32":
+        try:
+            import pythoncom
+            pythoncom.CoInitializeEx(pythoncom.COINIT_MULTITHREADED)
+        except Exception:
+            pass  # Already initialized or incompatible model — continue
+
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
 
@@ -212,6 +239,9 @@ def main():
     if custom_css:
         stylesheet += "\n" + custom_css
     app.setStyleSheet(stylesheet)
+
+    from .harper_client import HarperClient
+    app.aboutToQuit.connect(lambda: HarperClient.shutdown_all())
 
     phr_app = PhrAIseApp()
     phr_app.run()

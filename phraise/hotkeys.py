@@ -1,3 +1,4 @@
+import atexit
 import re
 import threading
 import time
@@ -77,6 +78,7 @@ class DoubleTapDetector:
         self._timer = None
         self._listener = None
         self._lock = threading.Lock()
+        self._callback_running = False
         self._running = True
 
     def start(self):
@@ -117,7 +119,12 @@ class DoubleTapDetector:
         key_name = self._key_name(key)
         if key_name is None:
             return
+
+        fire_callback = False
         with self._lock:
+            if self._callback_running:
+                return
+
             is_modifier = False
             for mod_name, mod_keys in self.MODIFIER_KEY_MAP.items():
                 if key in mod_keys or key_name == mod_name:
@@ -140,14 +147,21 @@ class DoubleTapDetector:
                 elif self._state == "WAITING_KEY":
                     self._cancel_timer()
                     self._state = "MODIFIERS_HELD"
-                    try:
-                        self._callback()
-                    except Exception as e:
-                        write_error(e, "DoubleTapDetector.callback")
+                    fire_callback = True
+                    self._callback_running = True
             else:
                 if self._state == "WAITING_KEY":
                     self._cancel_timer()
                     self._state = "MODIFIERS_HELD"
+
+        if fire_callback:
+            try:
+                self._callback()
+            except Exception as e:
+                write_error(e, "DoubleTapDetector.callback")
+            finally:
+                with self._lock:
+                    self._callback_running = False
 
     def _on_release(self, key):
         if not self._running:
@@ -214,6 +228,7 @@ class HotkeyManager:
         self._handlers: dict[str, Callable] = {}
         self._lock = threading.Lock()
         self._running = False
+        atexit.register(self.stop)
 
     def start(self):
         if self._running:

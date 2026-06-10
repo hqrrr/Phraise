@@ -249,7 +249,12 @@ class FloatingWindow(QWidget):
         self._pinned: bool = True
         self._model_combo = None
 
-        self._setup_window()
+    @property
+    def current_mode(self) -> str:
+        """Return the current mode ('optimize' or 'translate')."""
+        return self._current_mode
+
+    def _setup_window(self):
         self._build_ui()
 
         add_listener(self._retranslate_ui)

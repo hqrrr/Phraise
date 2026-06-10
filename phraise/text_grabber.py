@@ -1,4 +1,5 @@
 import sys
+import threading
 import time
 
 import pyperclip
@@ -7,19 +8,42 @@ from .config import config
 from .error_log import write_error
 
 
+def _ensure_com_initialized():
+    """Initialize COM MTA on the current thread if not already initialized.
+
+    On non-Windows platforms this is a no-op.  On Windows, UIA operations
+    require a COM apartment — calling this before any UIA call ensures one
+    exists without double-initializing or changing an already-established
+    apartment model.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        import pythoncom
+        pythoncom.CoInitializeEx(pythoncom.COINIT_MULTITHREADED)
+    except Exception:
+        pass  # Already initialized or incompatible apartment model
+
+
 class TextGrabber:
     """Grab and replace text in the foreground application using UIA or clipboard fallback."""
 
     def __init__(self):
         self._original_clipboard: str = ""
+        self._clipboard_saved: bool = False
         self._foreground_control = None
+        self._state_lock = threading.Lock()
 
     def capture_foreground(self):
+        _ensure_com_initialized()
         try:
             import uiautomation as uia
-            self._foreground_control = uia.GetFocusedControl()
+            control = uia.GetFocusedControl()
+            with self._state_lock:
+                self._foreground_control = control
         except Exception:
-            self._foreground_control = None
+            with self._state_lock:
+                self._foreground_control = None
 
     def get_selected_text(self, use_clipboard: bool = True) -> str:
         text = self._get_selected_via_uia()
@@ -43,10 +67,13 @@ class TextGrabber:
 
     def focus_foreground(self) -> bool:
         """Attempt to restore focus to the captured foreground control."""
-        if self._foreground_control is None:
+        with self._state_lock:
+            control = self._foreground_control
+        if control is None:
             return False
+        _ensure_com_initialized()
         try:
-            self._foreground_control.SetFocus()
+            control.SetFocus()
             return True
         except Exception as e:
             write_error(e, "focus_foreground")
@@ -55,6 +82,7 @@ class TextGrabber:
     def replace_text(self, new_text: str) -> bool:
         if not new_text:
             return False
+        _ensure_com_initialized()
         self.focus_foreground()
         if self._replace_via_uia(new_text):
             return True
@@ -67,7 +95,10 @@ class TextGrabber:
             except ImportError:
                 return ""
 
-            control = self._foreground_control or uia.GetFocusedControl()
+            with self._state_lock:
+                control = self._foreground_control
+            if control is None:
+                control = uia.GetFocusedControl()
             if control is None:
                 return ""
 
@@ -132,7 +163,10 @@ class TextGrabber:
             except ImportError:
                 return False
 
-            control = self._foreground_control or uia.GetFocusedControl()
+            with self._state_lock:
+                control = self._foreground_control
+            if control is None:
+                control = uia.GetFocusedControl()
             if control is None:
                 return False
 
@@ -154,14 +188,14 @@ class TextGrabber:
                         if selection and selection[0]:
                             rng = selection[0]
                             rng.Select()
-                            control.SendKeys(new_text)
+                            control.SendKeys(self._escape_sendkeys(new_text))
                             return True
                         else:
                             # No active selection; select all and replace
                             doc_range = tp.DocumentRange()
                             if doc_range:
                                 doc_range.Select()
-                                control.SendKeys(new_text)
+                                control.SendKeys(self._escape_sendkeys(new_text))
                                 return True
                 except AttributeError:
                     pass
@@ -200,15 +234,22 @@ class TextGrabber:
 
     def _save_clipboard(self):
         try:
-            self._original_clipboard = pyperclip.paste()
+            content = pyperclip.paste()
+            with self._state_lock:
+                self._original_clipboard = content
+            self._clipboard_saved = True
         except Exception as e:
             write_error(e, "_save_clipboard")
-            self._original_clipboard = ""
+            with self._state_lock:
+                self._original_clipboard = ""
+            self._clipboard_saved = False
 
     def _restore_clipboard(self):
-        if self._original_clipboard:
+        if self._clipboard_saved:
+            with self._state_lock:
+                content = self._original_clipboard
             try:
-                pyperclip.copy(self._original_clipboard)
+                pyperclip.copy(content)
             except Exception as e:
                 write_error(e, "_restore_clipboard")
                 pass
@@ -247,6 +288,21 @@ class TextGrabber:
         ctypes.windll.user32.keybd_event(VK_C, 0, 0, 0)
         ctypes.windll.user32.keybd_event(VK_C, 0, KEYEVENTF_KEYUP, 0)
         ctypes.windll.user32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
+
+    @staticmethod
+    def _escape_sendkeys(text: str) -> str:
+        """Escape SendKeys special characters: {}()+-^%~"""
+        result = []
+        for ch in text:
+            if ch == '{':
+                result.append('{{}')
+            elif ch == '}':
+                result.append('{}}')
+            elif ch in '+^%~()':
+                result.append(f'{{{ch}}}')
+            else:
+                result.append(ch)
+        return ''.join(result)
 
     @staticmethod
     def _send_paste_via_ctypes():
