@@ -1,5 +1,6 @@
 import json
 import os
+import tempfile
 import threading
 from pathlib import Path
 from typing import Any, Callable
@@ -7,7 +8,13 @@ from typing import Any, Callable
 from .error_log import write_error
 
 APP_NAME = "PhrAIse"
-CONFIG_DIR = Path(os.environ["APPDATA"]) / APP_NAME
+_APPDATA = os.environ.get("APPDATA")
+if _APPDATA is None:
+    try:
+        _APPDATA = str(Path.home() / "AppData" / "Roaming")
+    except RuntimeError:
+        _APPDATA = tempfile.gettempdir()
+CONFIG_DIR = Path(_APPDATA) / APP_NAME
 CONFIG_FILE = CONFIG_DIR / "settings.json"
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -20,6 +27,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "temperature": 0.3,
             "max_tokens": 4096,
             "extra_params": "",
+            "mode": "remote",
         },
         "model_2": {
             "provider": "deepseek",
@@ -29,6 +37,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "temperature": 0.5,
             "max_tokens": 8192,
             "extra_params": "",
+            "mode": "remote",
         },
     },
     "styles": [
@@ -77,6 +86,19 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "optimize_model": "model_1",
         "translate_model": "model_2",
     },
+    "harper": {
+        "dialect": "American",
+        "linters": {
+            "SpellCheck": True,
+            "RepeatedWords": True,
+            "LongSentences": False,
+            "Spaces": True,
+            "AnA": True,
+            "UnclosedQuotes": True,
+            "WrongApostrophe": True,
+        },
+        "timeout_secs": 30,
+    },
 }
 
 
@@ -86,9 +108,11 @@ class Config:
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._data = None
-            cls._instance._listeners: list[Callable] = []
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._data = None
+                    cls._instance._listeners: list[Callable] = []
         return cls._instance
 
     def __init__(self):
@@ -120,12 +144,24 @@ class Config:
         else:
             self._data = dict(DEFAULT_CONFIG)
             self.save()
+        self._validate()
+
+    def _save_unlocked(self):
+        """Persist ``_data`` to disk atomically.
+
+        Caller MUST hold ``self._lock``.  Writes to a ``.tmp`` sibling then
+        uses ``os.replace()`` so that a crash mid-write never corrupts the
+        real ``settings.json``.
+        """
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = CONFIG_FILE.with_suffix(".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(self._data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, CONFIG_FILE)
 
     def save(self):
         with self._lock:
-            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-                json.dump(self._data, f, ensure_ascii=False, indent=2)
+            self._save_unlocked()
 
     def get(self, *keys: str, default=None):
         node = self._data
@@ -139,19 +175,21 @@ class Config:
         return node
 
     def set(self, *keys: str, value):
-        node = self._data
-        for k in keys[:-1]:
-            if k not in node:
-                node[k] = {}
-            node = node[k]
-        node[keys[-1]] = value
-        self.save()
+        with self._lock:
+            node = self._data
+            for k in keys[:-1]:
+                if k not in node:
+                    node[k] = {}
+                node = node[k]
+            node[keys[-1]] = value
+            self._save_unlocked()
         self._notify()
 
     def update_section(self, section: str, updates: dict):
-        if section in self._data:
-            self._data[section].update(updates)
-        self.save()
+        with self._lock:
+            if section in self._data:
+                self._data[section].update(updates)
+            self._save_unlocked()
         self._notify()
 
     def add_listener(self, callback: Callable):
@@ -178,6 +216,41 @@ class Config:
             else:
                 result[key] = value
         return result
+
+    def _validate(self):
+        """Fix malformed config values with per-field fallbacks.
+
+        Called after _deep_merge in _load() to ensure critical fields
+        have correct types before they reach downstream consumers.
+        """
+        if "max_tokens" in self._data:
+            val = self._data["max_tokens"]
+            if type(val) is not int:
+                write_error(
+                    ValueError(
+                        f"max_tokens has type {type(val).__name__}, "
+                        f"expected int; using default 1024"
+                    ),
+                    "config._validate.max_tokens",
+                )
+                self._data["max_tokens"] = 1024
+
+        if "models" in self._data:
+            val = self._data["models"]
+            if not isinstance(val, dict):
+                write_error(
+                    ValueError(
+                        f"models has type {type(val).__name__}, "
+                        f"expected dict; using default empty dict"
+                    ),
+                    "config._validate.models",
+                )
+                self._data["models"] = {}
+
+    def is_model_local(self, slot_name: str) -> bool:
+        """Check if a model slot is configured for local (Harper) mode."""
+        mode = self.get("models", slot_name, "mode", default="remote")
+        return mode == "local"
 
     @property
     def data(self):

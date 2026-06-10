@@ -1,10 +1,17 @@
 import os
+import tempfile
 import traceback
 from datetime import datetime
 from pathlib import Path
 
 APP_NAME = "PhrAIse"
-LOG_DIR = Path(os.environ["APPDATA"]) / APP_NAME
+_APPDATA = os.environ.get("APPDATA")
+if _APPDATA is None:
+    try:
+        _APPDATA = str(Path.home() / "AppData" / "Roaming")
+    except RuntimeError:
+        _APPDATA = tempfile.gettempdir()
+LOG_DIR = Path(_APPDATA) / APP_NAME
 LOG_FILE = LOG_DIR / "error.log"
 
 
