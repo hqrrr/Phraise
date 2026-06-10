@@ -3,6 +3,8 @@ from .i18n import t, SUPPORTED_LANGUAGES, set_language, get_language, add_listen
 
 import threading
 
+import shiboken6
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QScrollArea,
@@ -67,12 +69,16 @@ class SettingsPanel(QDialog):
         self.setWindowFlags(flags)
 
         self._registered_listener = False
+        self._is_closing = False
 
         self._build_ui()
 
         add_listener(self._retranslate_ui)
         self._registered_listener = True
-        self.finished.connect(lambda: remove_listener(self._retranslate_ui))
+        self.finished.connect(lambda: (
+            setattr(self, '_is_closing', True),
+            remove_listener(self._retranslate_ui),
+        ))
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -116,8 +122,35 @@ class SettingsPanel(QDialog):
         quality_cfg = config.get("models", "model_2", default={})
 
         layout.addWidget(QLabel(t("settings.section.model_assignment")))
-        self._build_assign_row(layout, t("settings.label.optimize_model"), "optimize_model")
+        self._build_assign_row(layout, t("settings.label.optimize_model"), "optimize_model", include_harper=True)
         self._build_assign_row(layout, t("settings.label.translate_model"), "translate_model")
+
+        # ── Harper dialect config ──
+        layout.addSpacing(12)
+        harper_section_label = QLabel(t("settings.section.harper"))
+        harper_section_label.setStyleSheet("color: #cdd6f4; font-size: 14px; font-weight: 600;")
+        layout.addWidget(harper_section_label)
+
+        dialect_row = QWidget()
+        drl = QHBoxLayout(dialect_row)
+        drl.setContentsMargins(0, 0, 0, 0)
+        dialect_lbl = QLabel(t("settings.label.harper_dialect"))
+        dialect_lbl.setFixedWidth(120)
+        dialect_lbl.setStyleSheet("color: #a6adc8;")
+        drl.addWidget(dialect_lbl)
+
+        self._harper_dialect = NoScrollComboBox()
+        dialects = ["American", "British", "Australian", "Canadian", "Indian"]
+        for d in dialects:
+            self._harper_dialect.addItem(d, d)
+        current_dialect = config.get("harper", "dialect", default="American")
+        idx = self._harper_dialect.findData(current_dialect)
+        if idx >= 0:
+            self._harper_dialect.setCurrentIndex(idx)
+        self._harper_dialect.setStyleSheet(self._combo_style())
+        drl.addWidget(self._harper_dialect)
+        drl.addStretch()
+        layout.addWidget(dialect_row)
 
         layout.addSpacing(12)
 
@@ -130,7 +163,7 @@ class SettingsPanel(QDialog):
         scroll.setWidget(w)
         return scroll
 
-    def _build_assign_row(self, layout, label_text, config_key):
+    def _build_assign_row(self, layout, label_text, config_key, include_harper=False):
         row = QWidget()
         rl = QHBoxLayout(row)
         rl.setContentsMargins(0, 0, 0, 0)
@@ -141,6 +174,8 @@ class SettingsPanel(QDialog):
         combo = NoScrollComboBox()
         combo.addItem(t("settings.model.one"), "model_1")
         combo.addItem(t("settings.model.two"), "model_2")
+        if include_harper:
+            combo.addItem(t("settings.model.harper"), "harper")
         current = config.get("general", config_key, default="model_1")
         idx = combo.findData(current)
         if idx >= 0:
@@ -322,6 +357,8 @@ class SettingsPanel(QDialog):
             combo.clear()
             combo.addItem(t("settings.model.one"), "model_1")
             combo.addItem(t("settings.model.two"), "model_2")
+            if attr == "_assign_optimize_model":
+                combo.addItem(t("settings.model.harper"), "harper")
             idx = combo.findData(current)
             if idx >= 0:
                 combo.setCurrentIndex(idx)
@@ -366,6 +403,13 @@ class SettingsPanel(QDialog):
         threading.Thread(target=do_test, daemon=True).start()
 
     def _on_test_done(self, model_key, ok, msg):
+        if self._is_closing:
+            return
+        if not shiboken6.isValid(self):
+            try:
+                _ = self._model_entries
+            except RuntimeError:
+                return  # C++ object already deleted
         entries = self._model_entries[model_key]
         if ok:
             entries["status"].setText(msg)
@@ -392,6 +436,13 @@ class SettingsPanel(QDialog):
         threading.Thread(target=do_fetch, daemon=True).start()
 
     def _on_fetch_done(self, model_key, names, err):
+        if self._is_closing:
+            return
+        if not shiboken6.isValid(self):
+            try:
+                _ = self._model_entries
+            except RuntimeError:
+                return  # C++ object already deleted
         entries = self._model_entries[model_key]
         if err:
             entries["status"].setText(err)
@@ -731,10 +782,9 @@ class SettingsPanel(QDialog):
         theme_layout.addWidget(QLabel(t("settings.label.theme")))
         self._theme_combo = NoScrollComboBox()
         self._theme_combo.addItem(t("settings.theme.dark"), "dark")
-        self._theme_combo.setCurrentText(
-            t("settings.theme.dark") if appearance_cfg.get("theme", "dark") == "dark"
-            else t("settings.theme.dark")
-        )
+        idx = self._theme_combo.findData(appearance_cfg.get("theme", "dark"))
+        if idx >= 0:
+            self._theme_combo.setCurrentIndex(idx)
         self._theme_combo.setStyleSheet(self._combo_style())
         self._theme_combo.setFixedWidth(200)
         theme_layout.addWidget(self._theme_combo)
@@ -859,26 +909,46 @@ class SettingsPanel(QDialog):
         for model_key in ("model_1", "model_2"):
             e = self._model_entries[model_key]
             provider_val = e["provider_combo"].currentData()
-            extra_params_text = e["extra_params"].text().strip()
-            if extra_params_text:
-                try:
-                    json.loads(extra_params_text)
-                except json.JSONDecodeError:
-                    QMessageBox.warning(self, t("settings.dialog.format_error"),
-                        t("settings.error.invalid_json", model=model_key))
-                    return
+
+            # Skip JSON validation for Harper-assigned model slot
+            if self._assign_optimize_model.currentData() != "harper":
+                extra_params_text = e["extra_params"].text().strip()
+                if extra_params_text:
+                    try:
+                        json.loads(extra_params_text)
+                    except json.JSONDecodeError:
+                        QMessageBox.warning(self, t("settings.dialog.format_error"),
+                            t("settings.error.invalid_json", model=model_key))
+                        return
+            else:
+                extra_params_text = e["extra_params"].text().strip()
+            try:
+                max_tokens_val = int(e["max_tokens"].text() or "1024")
+            except ValueError:
+                QMessageBox.warning(self, t("settings.dialog.format_error"),
+                    t("settings.error.invalid_number", field=t("settings.label.max_tokens")))
+                return
             data["models"][model_key] = {
                 "provider": provider_val if provider_val and provider_val != "custom" else e["provider_combo"].currentText(),
                 "api_base": e["api_base"].text(),
                 "api_key": e["api_key"].text(),
                 "model_name": e["model_combo"].currentText(),
                 "temperature": e["temperature_slider"].value() / 100.0,
-                "max_tokens": int(e["max_tokens"].text() or "1024"),
+                "max_tokens": max_tokens_val,
                 "extra_params": extra_params_text,
             }
 
-        data["general"]["optimize_model"] = self._assign_optimize_model.currentData()
+        optimize_model = self._assign_optimize_model.currentData()
+        data["general"]["optimize_model"] = optimize_model
+        if optimize_model == "harper":
+            data["models"]["model_1"]["mode"] = "local"
+        else:
+            if data["models"]["model_1"].get("mode") == "local":
+                data["models"]["model_1"]["mode"] = "remote"
         data["general"]["translate_model"] = self._assign_translate_model.currentData()
+
+        if hasattr(self, '_harper_dialect'):
+            data["harper"]["dialect"] = self._harper_dialect.currentData()
 
         styles = []
         for entry in self._style_entries:
@@ -903,7 +973,6 @@ class SettingsPanel(QDialog):
         data["trigger"].pop("hotkey_translate", None)
         data["trigger"]["hotkey_toggle_ball"] = self._hk_toggle.text()
 
-        data["general"]["theme"] = self._theme_combo.currentData()
         data["general"]["start_with_windows"] = self._startup_cb.isChecked()
         data["general"]["start_minimized"] = self._start_min_cb.isChecked()
         data["general"]["replace_auto_close"] = self._auto_close_cb.isChecked()
@@ -913,8 +982,22 @@ class SettingsPanel(QDialog):
         data["appearance"]["theme"] = self._theme_combo.currentData()
         data["appearance"]["custom_css"] = self._custom_css_editor.toPlainText()
 
-        data["floating_ball"]["opacity"] = float(self._ball_opacity.text() or "0.85")
-        data["floating_ball"]["size"] = int(self._ball_size.text() or "52")
+        try:
+            opacity_val = float(self._ball_opacity.text() or "0.85")
+        except ValueError:
+            QMessageBox.warning(self, t("settings.dialog.format_error"),
+                t("settings.error.invalid_number", field=t("settings.label.opacity")))
+            return
+
+        try:
+            size_val = int(self._ball_size.text() or "52")
+        except ValueError:
+            QMessageBox.warning(self, t("settings.dialog.format_error"),
+                t("settings.error.invalid_number", field=t("settings.label.ball_size")))
+            return
+
+        data["floating_ball"]["opacity"] = opacity_val
+        data["floating_ball"]["size"] = size_val
 
         config.save()
         self.accept()

@@ -468,6 +468,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Hotkey format is invalid. Please check and try again.",
         "zh-CN": "快捷键格式无效，请检查后重试。",
     },
+    "settings.error.invalid_number": {
+        "en": "\"{field}\" is not a valid number. Please enter a numeric value.",
+        "zh-CN": "\"{field}\" 不是有效的数字，请输入数值。",
+    },
     "settings.label.language": {
         "en": "UI Language:",
         "zh-CN": "界面语言：",
