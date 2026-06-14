@@ -756,51 +756,39 @@ class FloatingWindow(QWidget):
         row = QWidget()
         row.setStyleSheet(
             f"background: {theme['surface']}; border: 1px solid {theme['border']}; "
-            f"border-radius: 6px; padding: 4px;"
+            f"border-radius: 4px; padding: 2px;"
         )
         row_layout = QHBoxLayout(row)
-        row_layout.setContentsMargins(4, 4, 4, 4)
-        row_layout.setSpacing(8)
+        row_layout.setContentsMargins(3, 2, 3, 2)
+        row_layout.setSpacing(6)
+
+        text_container = QWidget()
+        text_layout = QVBoxLayout(text_container)
+        text_layout.setContentsMargins(0, 0, 0, 0)
+        text_layout.setSpacing(1)
+
+        badge_color = theme["red"] if severity == "error" else theme["orange"]
+        main_html = (
+            f"<span style='color:{badge_color};font-size:11px;'>&#9679;</span> "
+            f"<s style='color:{theme['red']};font-size:11px;'>{original_escaped}</s>"
+        )
+        if suggestion_escaped:
+            main_html += (
+                f" <span style='color:{theme['green']};font-size:11px;'>&#8594; {suggestion_escaped}</span>"
+            )
+        main_label = QLabel(main_html)
+        main_label.setWordWrap(True)
+        main_label.setTextFormat(Qt.RichText)
+        main_label.setStyleSheet(f"font-size: 11px; color: {theme['text']}; background: transparent; border: none;")
+        row_layout.addWidget(main_label, 1, alignment=Qt.AlignVCenter)
 
         checkbox = QCheckBox()
         checkbox.setChecked(enabled)
         checkbox.setEnabled(has_edit)
         checkbox.setToolTip(t("fw.tooltip.apply_fix") if has_edit else "")
-        checkbox.setStyleSheet("QCheckBox { spacing: 4px; }")
+        checkbox.setStyleSheet("QCheckBox::indicator { width: 14px; height: 14px; }")
         checkbox.stateChanged.connect(lambda state, i=issue: self._on_issue_enabled_changed(i, state))
-        row_layout.addWidget(checkbox, alignment=Qt.AlignTop)
-
-        text_container = QWidget()
-        text_layout = QVBoxLayout(text_container)
-        text_layout.setContentsMargins(0, 0, 0, 0)
-        text_layout.setSpacing(2)
-
-        badge_color = theme["red"] if severity == "error" else theme["orange"]
-        main_html = (
-            f"<span style='color:{badge_color};font-size:13px;'>&#9679;</span> "
-            f"<s style='color:{theme['red']};'>{original_escaped}</s>"
-        )
-        if suggestion_escaped:
-            main_html += (
-                f" <span style='color:{theme['green']};'>&#8594; {suggestion_escaped}</span>"
-            )
-        main_label = QLabel(main_html)
-        main_label.setWordWrap(True)
-        main_label.setTextFormat(Qt.RichText)
-        main_label.setStyleSheet(f"font-size: 12px; color: {theme['text']}; background: transparent; border: none;")
-        text_layout.addWidget(main_label)
-
-        if reason_escaped:
-            reason_label = QLabel(
-                f"<span style='color:{theme['text_dim']};font-size:10px;'>"
-                f"{reason_escaped}</span>"
-            )
-            reason_label.setWordWrap(True)
-            reason_label.setTextFormat(Qt.RichText)
-            reason_label.setStyleSheet(f"font-size: 10px; color: {theme['text_dim']}; background: transparent; border: none;")
-            text_layout.addWidget(reason_label)
-
-        row_layout.addWidget(text_container, 1, alignment=Qt.AlignTop)
+        row_layout.addWidget(checkbox, alignment=Qt.AlignVCenter)
         return row
 
     def _on_issue_enabled_changed(self, issue, state: int):
