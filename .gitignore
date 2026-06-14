@@ -227,3 +227,7 @@ build/
 *.exe
 phraise/settings_debug.json
 .omo
+
+# Harper grammar checker binary (downloaded at build time)
+phraise/lsp/harper-ls.exe
+phraise/lsp/*.zip

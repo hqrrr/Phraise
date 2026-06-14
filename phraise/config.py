@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 import tempfile
@@ -20,22 +21,22 @@ CONFIG_FILE = CONFIG_DIR / "settings.json"
 DEFAULT_CONFIG: dict[str, Any] = {
     "models": {
         "model_1": {
-            "provider": "gemini",
-            "api_base": "https://generativelanguage.googleapis.com/v1beta/openai/",
+            "provider": "",
+            "api_base": "",
             "api_key": "",
-            "model_name": "gemini-2.0-flash",
+            "model_name": "",
             "temperature": 0.3,
             "max_tokens": 4096,
             "extra_params": "",
             "mode": "remote",
         },
         "model_2": {
-            "provider": "deepseek",
-            "api_base": "https://api.deepseek.com/v1",
+            "provider": "",
+            "api_base": "",
             "api_key": "",
-            "model_name": "deepseek-chat",
+            "model_name": "",
             "temperature": 0.5,
-            "max_tokens": 8192,
+            "max_tokens": 4096,
             "extra_params": "",
             "mode": "remote",
         },
@@ -83,8 +84,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "start_minimized": False,
         "replace_auto_close": False,
         "theme": "dark",
-        "optimize_model": "model_1",
-        "translate_model": "model_2",
+        "optimize_model": "",
+        "translate_model": "",
     },
     "harper": {
         "dialect": "American",
@@ -139,10 +140,10 @@ class Config:
                     loaded["trigger"].pop("hotkey_translate", None)
                 self._data = self._deep_merge(DEFAULT_CONFIG, loaded)
             except (json.JSONDecodeError, OSError):
-                self._data = dict(DEFAULT_CONFIG)
+                self._data = copy.deepcopy(DEFAULT_CONFIG)
                 self.save()
         else:
-            self._data = dict(DEFAULT_CONFIG)
+            self._data = copy.deepcopy(DEFAULT_CONFIG)
             self.save()
         self._validate()
 
@@ -209,7 +210,7 @@ class Config:
 
     @staticmethod
     def _deep_merge(base: dict, override: dict) -> dict:
-        result = dict(base)
+        result = copy.deepcopy(base)
         for key, value in override.items():
             if key in result and isinstance(result[key], dict) and isinstance(value, dict):
                 result[key] = Config._deep_merge(result[key], value)
@@ -246,6 +247,31 @@ class Config:
                     "config._validate.models",
                 )
                 self._data["models"] = {}
+
+        if "styles" in self._data:
+            val = self._data["styles"]
+            if not isinstance(val, list) or not val:
+                write_error(
+                    ValueError(
+                        f"styles has type {type(val).__name__}, "
+                        f"expected non-empty list; using defaults"
+                    ),
+                    "config._validate.styles",
+                )
+                self._data["styles"] = list(DEFAULT_CONFIG["styles"])
+
+        if "general" in self._data and isinstance(self._data["general"], dict):
+            for field in ("optimize_model", "translate_model"):
+                val = self._data["general"].get(field)
+                if val is not None and not isinstance(val, str):
+                    write_error(
+                        ValueError(
+                            f"general.{field} has type {type(val).__name__}, "
+                            f"expected str; defaulting to ''"
+                        ),
+                        f"config._validate.general.{field}",
+                    )
+                    self._data["general"][field] = ""
 
     def is_model_local(self, slot_name: str) -> bool:
         """Check if a model slot is configured for local (Harper) mode."""

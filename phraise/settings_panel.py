@@ -172,14 +172,17 @@ class SettingsPanel(QDialog):
         lbl.setStyleSheet("color: #a6adc8; font-size: 12px;")
         rl.addWidget(lbl)
         combo = NoScrollComboBox()
+        combo.addItem(t("settings.model.not_selected"), "")
         combo.addItem(t("settings.model.one"), "model_1")
         combo.addItem(t("settings.model.two"), "model_2")
         if include_harper:
             combo.addItem(t("settings.model.harper"), "harper")
-        current = config.get("general", config_key, default="model_1")
+        current = config.get("general", config_key, default="")
         idx = combo.findData(current)
         if idx >= 0:
             combo.setCurrentIndex(idx)
+        else:
+            combo.setCurrentIndex(0)
         combo.setStyleSheet(self._combo_style())
         combo.setFixedWidth(220)
         rl.addWidget(combo)
@@ -355,11 +358,12 @@ class SettingsPanel(QDialog):
                 continue
             current = combo.currentData()
             combo.clear()
+            combo.addItem(t("settings.model.not_selected"), "")
             combo.addItem(t("settings.model.one"), "model_1")
             combo.addItem(t("settings.model.two"), "model_2")
             if attr == "_assign_optimize_model":
                 combo.addItem(t("settings.model.harper"), "harper")
-            idx = combo.findData(current)
+            idx = combo.findData(current) if current else -1
             if idx >= 0:
                 combo.setCurrentIndex(idx)
             else:
@@ -928,7 +932,8 @@ class SettingsPanel(QDialog):
                 QMessageBox.warning(self, t("settings.dialog.format_error"),
                     t("settings.error.invalid_number", field=t("settings.label.max_tokens")))
                 return
-            data["models"][model_key] = {
+            existing = data["models"].get(model_key, {})
+            existing.update({
                 "provider": provider_val if provider_val and provider_val != "custom" else e["provider_combo"].currentText(),
                 "api_base": e["api_base"].text(),
                 "api_key": e["api_key"].text(),
@@ -936,7 +941,8 @@ class SettingsPanel(QDialog):
                 "temperature": e["temperature_slider"].value() / 100.0,
                 "max_tokens": max_tokens_val,
                 "extra_params": extra_params_text,
-            }
+            })
+            data["models"][model_key] = existing
 
         optimize_model = self._assign_optimize_model.currentData()
         data["general"]["optimize_model"] = optimize_model
@@ -957,8 +963,7 @@ class SettingsPanel(QDialog):
                 "label": entry["label"].text(),
                 "prompt_keyword": entry["keyword"].text(),
             })
-        if styles:
-            data["styles"] = styles
+        data["styles"] = styles
 
         hk_invalid = (
             not self._validate_trigger_hotkey(self._hk_trigger.text()) or

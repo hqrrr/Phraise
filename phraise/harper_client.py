@@ -16,6 +16,7 @@ from phraise.harper_types import (
     HarperFixApplier,
     HarperIssue,
     LspDiagnostic,
+    LspTextEdit,
 )
 from phraise.harper_utils import get_harper_binary_path, is_harper_available
 from phraise.i18n import t
@@ -86,6 +87,10 @@ class HarperClient(QObject):
         self._linters = linters or {}
         self._timeout_secs = timeout_secs
         self._current_text = ""
+        self._pending_code_actions: dict[int, LspDiagnostic] = {}
+        self._collected_edits: list[LspTextEdit] = []
+        self._code_actions_expected: int = 0
+        self._last_diagnostics: list[LspDiagnostic] = []
         self._timeout_timer = QTimer(self)
         self._timeout_timer.setSingleShot(True)
         self._timeout_timer.timeout.connect(self._on_client_timeout)
@@ -120,6 +125,7 @@ class HarperClient(QObject):
             )
 
             self._manager.diagnostics_ready.connect(self._on_diagnostics)
+            self._manager.code_actions_ready.connect(self._on_code_actions_ready)
             self._manager.error_occurred.connect(self._on_error)
             self._manager.process_finished.connect(self._on_finished)
 
@@ -169,13 +175,50 @@ class HarperClient(QObject):
 
     def _on_diagnostics(self, diagnostics: list[LspDiagnostic]):
         self._timeout_timer.stop()
-        issues = HarperDiagnosticsParser.diagnostics_to_issues(
-            diagnostics, self._current_text
-        )
-        corrected = self._current_text
-        self.finished.emit(
-            LintResult(success=True, issues=issues, corrected_text=corrected, error="")
-        )
+        # Stop the manager-level send_text timeout as well
+        if self._manager is not None:
+            self._manager._timeout_timer.stop()
+
+        if not diagnostics:
+            self._current_text = self._current_text or ""
+            self.finished.emit(
+                LintResult(
+                    success=True, issues=[], corrected_text=self._current_text, error=""
+                )
+            )
+            return
+
+        self._last_diagnostics = diagnostics
+        self._pending_code_actions = {}
+        self._collected_edits = []
+        self._code_actions_expected = len(diagnostics)
+
+        for diag in diagnostics:
+            if self._manager is None:
+                break
+            req_id = self._manager.get_code_actions("file:///phraise.txt", diag.range)
+            self._pending_code_actions[req_id] = diag
+
+    def _on_code_actions_ready(self, request_id: int, edits: list[LspTextEdit]):
+        if request_id not in self._pending_code_actions:
+            return
+
+        del self._pending_code_actions[request_id]
+        if edits:
+            self._collected_edits.append(edits[0])
+
+        if not self._pending_code_actions:
+            issues = HarperDiagnosticsParser.diagnostics_to_issues(
+                self._last_diagnostics, self._current_text
+            )
+            corrected = HarperFixApplier.apply_fixes(
+                self._current_text, self._collected_edits
+            )
+            self.finished.emit(
+                LintResult(
+                    success=True, issues=issues, corrected_text=corrected, error=""
+                )
+            )
 
     def _on_error(self, error_msg: str):
         self._timeout_timer.stop()

@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QProcess, QTimer, Signal
 
-from phraise.harper_types import LspRange, build_did_open_notification, build_exit_notification, build_initialized_notification, build_initialize_request, build_register_capability_response, build_shutdown_request, build_workspace_config_response, parse_publish_diagnostics
+from phraise.harper_types import LspPosition, LspRange, LspTextEdit, build_did_open_notification, build_exit_notification, build_initialized_notification, build_initialize_request, build_register_capability_response, build_shutdown_request, build_workspace_config_response, parse_publish_diagnostics
 
 
 class HarperLspManager(QObject):
@@ -28,6 +28,7 @@ class HarperLspManager(QObject):
     """
 
     diagnostics_ready = Signal(list)  # list[LspDiagnostic]
+    code_actions_ready = Signal(int, list)  # request_id, list[LspTextEdit]
     error_occurred = Signal(str)  # error message
     process_finished = Signal(int)  # exit code
     server_ready = Signal()  # emitted after initialize→initialized handshake
@@ -105,7 +106,7 @@ class HarperLspManager(QObject):
         self._pending_request = True
         self._timeout_timer.start(self._timeout_secs * 1000)
 
-    def get_code_actions(self, uri: str, diagnostic_range: LspRange) -> None:
+    def get_code_actions(self, uri: str, diagnostic_range: LspRange) -> int:
         """Send ``textDocument/codeAction`` request for a diagnostic range.
 
         Parameters
@@ -114,6 +115,11 @@ class HarperLspManager(QObject):
             The document URI (e.g. ``file:///phraise.txt``).
         diagnostic_range : LspRange
             The range of the diagnostic to request actions for.
+
+        Returns
+        -------
+        int
+            The request ID assigned to this codeAction request.
         """
         self._request_id += 1
         msg = {
@@ -136,6 +142,7 @@ class HarperLspManager(QObject):
             },
         }
         self._write_message(msg)
+        return self._request_id
 
     def stop(self) -> None:
         """Shut down the LSP session and terminate the subprocess.
@@ -254,11 +261,15 @@ class HarperLspManager(QObject):
                 self._initialized = True
                 self.server_ready.emit()
 
+            # -- Response to codeAction request --
+            if req_id is not None and "result" in msg and "method" not in msg and req_id != self._initialize_request_id:
+                text_edits = _parse_code_action_result(msg.get("result", []))
+                self.code_actions_ready.emit(req_id, text_edits)
+
             # -- Diagnostics notification --
             if msg.get("method") == "textDocument/publishDiagnostics":
                 diags = parse_publish_diagnostics(msg)
-                if diags:
-                    self.diagnostics_ready.emit(diags)
+                self.diagnostics_ready.emit(diags)
 
     # ------------------------------------------------------------------
     # Signal handlers
@@ -283,3 +294,60 @@ class HarperLspManager(QObject):
     def _on_timeout(self) -> None:
         """Emit ``error_occurred`` when a pending request times out."""
         self.error_occurred.emit("Harper LSP request timeout")
+
+
+# ------------------------------------------------------------------
+# Module-level helpers
+# ------------------------------------------------------------------
+
+
+def _parse_code_action_result(result: list) -> list[LspTextEdit]:
+    """Parse a ``textDocument/codeAction`` response result into ``LspTextEdit`` list.
+
+    Takes ``result[0].edit.changes`` for the first URI key, converts each
+    ``{newText, range}`` dict into an ``LspTextEdit``.  Returns an empty
+    list when the result is empty, malformed, or contains no edits.
+    """
+    if not isinstance(result, list) or len(result) == 0:
+        return []
+
+    first_action = result[0]
+    if not isinstance(first_action, dict):
+        return []
+
+    edit = first_action.get("edit")
+    if not isinstance(edit, dict):
+        return []
+
+    changes = edit.get("changes")
+    if not isinstance(changes, dict):
+        return []
+
+    for _uri, uri_changes in changes.items():
+        if not isinstance(uri_changes, list):
+            continue
+        text_edits: list[LspTextEdit] = []
+        for change in uri_changes:
+            if not isinstance(change, dict):
+                continue
+            r = change.get("range", {})
+            start = r.get("start", {})
+            end = r.get("end", {})
+            text_edits.append(
+                LspTextEdit(
+                    range=LspRange(
+                        start=LspPosition(
+                            line=start.get("line", 0),
+                            character=start.get("character", 0),
+                        ),
+                        end=LspPosition(
+                            line=end.get("line", 0),
+                            character=end.get("character", 0),
+                        ),
+                    ),
+                    newText=change.get("newText", ""),
+                )
+            )
+        return text_edits
+
+    return []

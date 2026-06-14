@@ -182,6 +182,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Copied",
         "zh-CN": "已复制",
     },
+    "fw.toast.no_model_configured": {
+        "en": "No model configured. Please set up a model in Settings first.",
+        "zh-CN": "未配置模型，请先在设置中配置模型。",
+    },
     "fw.toast.truncated": {
         "en": "Response truncated, try switching models or shorten text",
         "zh-CN": "⚠ 响应被截断，建议切换模型或缩短文本",
@@ -235,6 +239,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "settings.model.two": {
         "en": "Model 2",
         "zh-CN": "模型二",
+    },
+    "settings.model.not_selected": {
+        "en": "-- Not selected --",
+        "zh-CN": "-- 未选择 --",
     },
     "settings.model.harper": {
         "en": "Local (Harper)",

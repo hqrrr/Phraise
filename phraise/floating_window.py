@@ -2,6 +2,7 @@ from .config import config
 from .dispatch import run_on_main
 from .error_log import write_error
 from .harper_client import LintResult
+from .harper_types import HarperIssue
 from .i18n import t, SOURCE_LANGUAGES, TARGET_LANGUAGES, add_listener, remove_listener
 from .llm_client import optimize_text, translate_text, custom_instruction, check_output_fit
 from .text_grabber import TextGrabber
@@ -249,15 +250,14 @@ class FloatingWindow(QWidget):
         self._pinned: bool = True
         self._model_combo = None
 
+        self._setup_window()
+        self._build_ui()
+        add_listener(self._retranslate_ui)
+
     @property
     def current_mode(self) -> str:
         """Return the current mode ('optimize' or 'translate')."""
         return self._current_mode
-
-    def _setup_window(self):
-        self._build_ui()
-
-        add_listener(self._retranslate_ui)
 
     def _setup_window(self):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
@@ -726,10 +726,16 @@ class FloatingWindow(QWidget):
             return
 
         for issue in issues:
-            original = html.escape(issue.get("original", ""))
-            suggestion = html.escape(issue.get("suggestion", ""))
-            reason = issue.get("reason", "")
-            severity = issue.get("severity", "warning")
+            if isinstance(issue, HarperIssue):
+                original = html.escape(issue.original)
+                suggestion = html.escape(issue.suggestion)
+                reason = issue.reason
+                severity = issue.severity
+            else:
+                original = html.escape(issue.get("original", ""))
+                suggestion = html.escape(issue.get("suggestion", ""))
+                reason = issue.get("reason", "")
+                severity = issue.get("severity", "warning")
 
             badge_color = theme["red"] if severity == "error" else theme["orange"]
             escaped_reason = html.escape(reason) if reason else ""
@@ -806,6 +812,8 @@ class FloatingWindow(QWidget):
         if harper_mode:
             self._rewrite_texts[1].hide()
             self._rewrite_texts[2].hide()
+            self._rewrite_texts[1].text_edit.clear()
+            self._rewrite_texts[2].text_edit.clear()
             self._rewrite_label.setText(t("fw.label.corrected_text"))
             self._model_combo.hide()
             for btn in self._style_buttons.values():
@@ -828,7 +836,13 @@ class FloatingWindow(QWidget):
         self._is_loading = True
         self._set_loading_state(True)
 
-        optimize_model = config.get("general", "optimize_model", default="model_1")
+        optimize_model = config.get("general", "optimize_model", default="")
+
+        if not optimize_model:
+            self._show_toast(t("fw.toast.no_model_configured"))
+            self._is_loading = False
+            self._set_loading_state(False)
+            return
 
         # ── Unified dispatch: always check Harper availability ──
         from .harper_client import HarperClient
@@ -927,6 +941,9 @@ class FloatingWindow(QWidget):
 
         if self._rewrite_texts:
             self._rewrite_texts[0].text_edit.setPlainText(result.corrected_text)
+            self._set_harper_layout(True)
+            self._rewrite_texts[1].text_edit.clear()
+            self._rewrite_texts[2].text_edit.clear()
 
         payload = {
             "grammar_issues": result.issues,
@@ -965,7 +982,8 @@ class FloatingWindow(QWidget):
         elif isinstance(result, dict) and "corrected_text" in result:
             self._rewrite_texts[0].text_edit.setPlainText(result["corrected_text"])
             for i in range(1, len(self._rewrite_texts)):
-                self._rewrite_texts[i].text_edit.setPlainText(t("fw.no_more_versions"))
+                self._rewrite_texts[i].text_edit.clear()
+            self._set_harper_layout(True)
         else:
             self._show_raw_text(result)
 
@@ -974,6 +992,14 @@ class FloatingWindow(QWidget):
             return
         self._is_loading = True
         self._set_loading_state(True)
+
+        translate_model = config.get("general", "translate_model", default="")
+
+        if not translate_model:
+            self._show_toast(t("fw.toast.no_model_configured"))
+            self._is_loading = False
+            self._set_loading_state(False)
+            return
 
         ok, _, _, warning = check_output_fit(
             self._current_text,

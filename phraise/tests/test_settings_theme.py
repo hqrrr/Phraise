@@ -104,7 +104,11 @@ class TestThemeSaveDeduplication(unittest.TestCase):
             p.start()
             self.addCleanup(p.stop)
 
+        from phraise import settings_panel
         from phraise.settings_panel import SettingsPanel
+        # Align the module-level config reference with the patched singleton so
+        # _on_save mutates and saves the same object this test asserts on.
+        patch.object(settings_panel, "config", cfg_mod.config).start()
         self._panel = SettingsPanel()
 
     def tearDown(self):
@@ -125,8 +129,11 @@ class TestThemeSaveDeduplication(unittest.TestCase):
         self._panel._custom_css_editor = MagicMock()
         self._panel._custom_css_editor.toPlainText.return_value = ""
         self._panel._startup_cb = MagicMock()
+        self._panel._startup_cb.isChecked.return_value = False
         self._panel._start_min_cb = MagicMock()
+        self._panel._start_min_cb.isChecked.return_value = False
         self._panel._auto_close_cb = MagicMock()
+        self._panel._auto_close_cb.isChecked.return_value = False
         self._panel._ball_opacity = MagicMock()
         self._panel._ball_opacity.text.return_value = "0.85"
         self._panel._ball_size = MagicMock()

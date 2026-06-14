@@ -48,6 +48,18 @@ def _make_fw(**overrides) -> FloatingWindow:
     fw._populate_grammar_issues = MagicMock()
     fw._do_optimize_llm = MagicMock()
 
+    fw._rewrite_label = MagicMock()
+    fw._rewrite_label.setText = MagicMock()
+
+    fw._model_combo = MagicMock()
+    fw._model_combo.hide = MagicMock()
+    fw._model_combo.show = MagicMock()
+
+    fw._style_buttons = {"concise": MagicMock(), "formal": MagicMock(), "natural": MagicMock()}
+    for btn in fw._style_buttons.values():
+        btn.setEnabled = MagicMock()
+        btn.setToolTip = MagicMock()
+
     fw._rewrite_texts = [MagicMock(), MagicMock(), MagicMock()]
     for rt in fw._rewrite_texts:
         rt.text_edit = MagicMock()

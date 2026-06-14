@@ -183,11 +183,11 @@ class TestHarperStdoutReader(unittest.TestCase):
         manager.diagnostics_ready.emit.assert_not_called()
 
     # ------------------------------------------------------------------
-    # 6. Empty diagnostics list — no emission
+    # 6. Empty diagnostics list — must emit
     # ------------------------------------------------------------------
 
-    def test_empty_diagnostics_does_not_emit(self):
-        """A publishDiagnostics with empty diagnostics list — no signal."""
+    def test_empty_diagnostics_emits(self):
+        """A publishDiagnostics with empty diagnostics list — emit []."""
         manager, mock_proc = self._make_manager_with_mock_process()
         manager.diagnostics_ready = Mock()
 
@@ -198,7 +198,7 @@ class TestHarperStdoutReader(unittest.TestCase):
         }
         self._feed_bytes(mock_proc, _make_frame(empty_diag))
 
-        manager.diagnostics_ready.emit.assert_not_called()
+        manager.diagnostics_ready.emit.assert_called_once_with([])
 
     # ------------------------------------------------------------------
     # 7. Mixed messages — only publishDiagnostics emitted
