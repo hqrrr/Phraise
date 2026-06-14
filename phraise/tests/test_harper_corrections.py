@@ -179,6 +179,7 @@ class TestHarperCorrections(unittest.TestCase):
         self.assertNotEqual(result.corrected_text, "Key Fewatures")
         self.assertEqual(len(result.issues), 1)
         self.assertEqual(result.issues[0].original, "Fewatures")
+        self.assertEqual(result.issues[0].suggestion, "Features")
         self.assertIn("Did you mean", result.issues[0].reason)
 
     def test_multiple_diagnostics_all_corrected(self):

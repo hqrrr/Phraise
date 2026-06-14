@@ -74,6 +74,8 @@ class HarperIssue:
     suggestion: str
     reason: str
     severity: str  # "error" | "warning" | "info" | "hint"
+    edit: LspTextEdit | None = None
+    enabled: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -341,24 +343,33 @@ _SEVERITY_MAP: dict[int, str] = {
 def diagnostics_to_harper_issues(
     diagnostics: list[LspDiagnostic],
     original_text: str,
+    edits_by_diagnostic: dict[int, LspTextEdit] | None = None,
 ) -> list[HarperIssue]:
     """Convert LSP diagnostics into internal ``HarperIssue`` objects.
 
-    The ``suggestion`` field is left empty (``""``) — it will be populated
-    later by the code-action fix applier.
+    When ``edits_by_diagnostic`` is provided, each issue's ``suggestion`` is
+    populated from the matching text edit's ``newText``.  Otherwise the
+    suggestion is left empty.
     """
     issues: list[HarperIssue] = []
 
-    for d in diagnostics:
+    for i, d in enumerate(diagnostics):
         severity_str = _SEVERITY_MAP.get(d.severity, "hint")
         original = _extract_text_at_range(original_text, d.range)
+        suggestion = ""
+        edit = None
+        if edits_by_diagnostic:
+            edit = edits_by_diagnostic.get(i)
+            if edit is not None:
+                suggestion = edit.newText
 
         issues.append(
             HarperIssue(
                 original=original,
-                suggestion="",
+                suggestion=suggestion,
                 reason=d.message,
                 severity=severity_str,
+                edit=edit,
             )
         )
 
@@ -426,25 +437,37 @@ class HarperDiagnosticsParser:
         return diagnostics
 
     @staticmethod
-    def diagnostics_to_issues(diagnostics: list[LspDiagnostic], original_text: str) -> list[HarperIssue]:
+    def diagnostics_to_issues(
+        diagnostics: list[LspDiagnostic],
+        original_text: str,
+        edits_by_diagnostic: dict[int, LspTextEdit] | None = None,
+    ) -> list[HarperIssue]:
         """Convert ``LspDiagnostic`` list to ``HarperIssue`` list.
 
         Severity mapping: 1 | ``"error"``, 2 | ``"warning"``, 3 | ``"info"``,
         4 | ``"hint"``, unknown | ``"hint"``.
-        Suggestion starts empty (filled later by the fix applier).
+        When ``edits_by_diagnostic`` is provided, each issue's ``suggestion``
+        is populated from the matching text edit's ``newText``.
         """
         severity_map = {1: "error", 2: "warning", 3: "info", 4: "hint"}
 
         issues: list[HarperIssue] = []
-        for diag in diagnostics:
+        for i, diag in enumerate(diagnostics):
             original = _extract_text_at_range(original_text, diag.range)
             severity = severity_map.get(diag.severity, "hint")
+            suggestion = ""
+            edit = None
+            if edits_by_diagnostic:
+                edit = edits_by_diagnostic.get(i)
+                if edit is not None:
+                    suggestion = edit.newText
             issues.append(
                 HarperIssue(
                     original=original,
-                    suggestion="",
+                    suggestion=suggestion,
                     reason=diag.message,
                     severity=severity,
+                    edit=edit,
                 )
             )
 

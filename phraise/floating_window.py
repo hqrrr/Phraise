@@ -28,7 +28,7 @@ from PySide6.QtGui import QFont, QColor, QHideEvent, QMouseEvent, QPainter, QPai
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QTabWidget, QScrollArea, QTextEdit, QComboBox,
-    QFrame, QSizePolicy, QGridLayout, QLayout
+    QFrame, QSizePolicy, QGridLayout, QLayout, QCheckBox
 )
 
 
@@ -719,6 +719,10 @@ class FloatingWindow(QWidget):
         self._grammar_container.show()
         self._grammar_header.setText(t("fw.label.grammar_expanded"))
 
+        self._grammar_issues = list(issues)
+
+        self._recompute_corrected_text()
+
         if not issues:
             no_issues = QLabel(t("fw.no_issues"))
             no_issues.setStyleSheet(label_style(theme, "green", "font-size: 12px; font-weight: 500;"))
@@ -726,38 +730,97 @@ class FloatingWindow(QWidget):
             return
 
         for issue in issues:
-            if isinstance(issue, HarperIssue):
-                original = html.escape(issue.original)
-                suggestion = html.escape(issue.suggestion)
-                reason = issue.reason
-                severity = issue.severity
-            else:
-                original = html.escape(issue.get("original", ""))
-                suggestion = html.escape(issue.get("suggestion", ""))
-                reason = issue.get("reason", "")
-                severity = issue.get("severity", "warning")
+            row = self._build_issue_row(issue)
+            self._grammar_layout.addWidget(row)
 
-            badge_color = theme["red"] if severity == "error" else theme["orange"]
-            escaped_reason = html.escape(reason) if reason else ""
+    def _build_issue_row(self, issue) -> QWidget:
+        if isinstance(issue, HarperIssue):
+            original = issue.original
+            suggestion = issue.suggestion
+            reason = issue.reason
+            severity = issue.severity
+            enabled = issue.enabled
+            has_edit = issue.edit is not None
+        else:
+            original = issue.get("original", "")
+            suggestion = issue.get("suggestion", "")
+            reason = issue.get("reason", "")
+            severity = issue.get("severity", "warning")
+            enabled = issue.get("enabled", True)
+            has_edit = bool(suggestion)
 
-            rich_text = (
-                f"<span style='color:{badge_color};font-size:13px;'>●</span> "
-                f"<s style='color:{theme['red']};'>{original}</s> "
-                f"<span style='color:{theme['green']};'>→ {suggestion}</span>"
+        original_escaped = html.escape(original)
+        suggestion_escaped = html.escape(suggestion)
+        reason_escaped = html.escape(reason) if reason else ""
+
+        row = QWidget()
+        row.setStyleSheet(
+            f"background: {theme['surface']}; border: 1px solid {theme['border']}; "
+            f"border-radius: 6px; padding: 4px;"
+        )
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(4, 4, 4, 4)
+        row_layout.setSpacing(8)
+
+        checkbox = QCheckBox()
+        checkbox.setChecked(enabled)
+        checkbox.setEnabled(has_edit)
+        checkbox.setToolTip(t("fw.tooltip.apply_fix") if has_edit else "")
+        checkbox.setStyleSheet("QCheckBox { spacing: 4px; }")
+        checkbox.stateChanged.connect(lambda state, i=issue: self._on_issue_enabled_changed(i, state))
+        row_layout.addWidget(checkbox, alignment=Qt.AlignTop)
+
+        text_container = QWidget()
+        text_layout = QVBoxLayout(text_container)
+        text_layout.setContentsMargins(0, 0, 0, 0)
+        text_layout.setSpacing(2)
+
+        badge_color = theme["red"] if severity == "error" else theme["orange"]
+        main_html = (
+            f"<span style='color:{badge_color};font-size:13px;'>&#9679;</span> "
+            f"<s style='color:{theme['red']};'>{original_escaped}</s>"
+        )
+        if suggestion_escaped:
+            main_html += (
+                f" <span style='color:{theme['green']};'>&#8594; {suggestion_escaped}</span>"
             )
-            if escaped_reason:
-                rich_text += (
-                    f"<br><span style='color:{theme['text_dim']};font-size:10px;'>"
-                    f"{escaped_reason}</span>"
-                )
+        main_label = QLabel(main_html)
+        main_label.setWordWrap(True)
+        main_label.setTextFormat(Qt.RichText)
+        main_label.setStyleSheet(f"font-size: 12px; color: {theme['text']}; background: transparent; border: none;")
+        text_layout.addWidget(main_label)
 
-            label = QLabel(rich_text)
-            label.setWordWrap(True)
-            label.setTextFormat(Qt.RichText)
-            label.setStyleSheet(
-                f"background: {theme['surface']}; border: 1px solid {theme['border']}; "
-                f"border-radius: 6px; padding: 6px 8px; font-size: 12px; color: {theme['text']};")
-            self._grammar_layout.addWidget(label)
+        if reason_escaped:
+            reason_label = QLabel(
+                f"<span style='color:{theme['text_dim']};font-size:10px;'>"
+                f"{reason_escaped}</span>"
+            )
+            reason_label.setWordWrap(True)
+            reason_label.setTextFormat(Qt.RichText)
+            reason_label.setStyleSheet(f"font-size: 10px; color: {theme['text_dim']}; background: transparent; border: none;")
+            text_layout.addWidget(reason_label)
+
+        row_layout.addWidget(text_container, 1, alignment=Qt.AlignTop)
+        return row
+
+    def _on_issue_enabled_changed(self, issue, state: int):
+        enabled = state == Qt.CheckState.Checked.value
+        if isinstance(issue, HarperIssue):
+            issue.enabled = enabled
+        else:
+            issue["enabled"] = enabled
+        self._recompute_corrected_text()
+
+    def _recompute_corrected_text(self):
+        edits = []
+        for issue in getattr(self, "_grammar_issues", []):
+            if isinstance(issue, HarperIssue) and issue.enabled and issue.edit is not None:
+                edits.append(issue.edit)
+            elif not isinstance(issue, HarperIssue) and issue.get("enabled", True) and issue.get("suggestion"):
+                pass
+        from .harper_types import HarperFixApplier
+        corrected = HarperFixApplier.apply_fixes(self._current_text, edits)
+        self._rewrite_texts[0].text_edit.setPlainText(corrected)
 
     def _clear_layout(self, layout):
         while layout.count():
@@ -819,6 +882,12 @@ class FloatingWindow(QWidget):
             for btn in self._style_buttons.values():
                 btn.setEnabled(False)
                 btn.setToolTip(t("fw.label.harper_style_disabled"))
+            if hasattr(self, "_custom_instruction_label"):
+                self._custom_instruction_label.hide()
+            if hasattr(self, "_custom_entry"):
+                self._custom_entry.hide()
+            if hasattr(self, "_custom_btn"):
+                self._custom_btn.hide()
         else:
             self._rewrite_texts[1].show()
             self._rewrite_texts[2].show()
@@ -827,6 +896,12 @@ class FloatingWindow(QWidget):
             for btn in self._style_buttons.values():
                 btn.setEnabled(True)
                 btn.setToolTip("")
+            if hasattr(self, "_custom_instruction_label"):
+                self._custom_instruction_label.show()
+            if hasattr(self, "_custom_entry"):
+                self._custom_entry.show()
+            if hasattr(self, "_custom_btn"):
+                self._custom_btn.show()
 
     # ---- LLM calls ----
 

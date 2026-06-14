@@ -15,10 +15,10 @@ Tests in this file:
 import unittest
 from unittest.mock import MagicMock, patch
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QCheckBox, QLabel
 
 from phraise.floating_window import FloatingWindow
-from phraise.harper_types import HarperIssue
+from phraise.harper_types import HarperIssue, LspPosition, LspRange, LspTextEdit
 
 
 # ---------------------------------------------------------------------------
@@ -95,6 +95,9 @@ class TestFloatingWindowHarperIssues(unittest.TestCase):
             patch("phraise.floating_window.config.get", side_effect=_mock_config_get),
         ):
             fw = FloatingWindow(grabber, on_close=MagicMock())
+        fw._custom_instruction_label.setParent(fw)
+        fw._custom_entry.setParent(fw)
+        fw._custom_btn.setParent(fw)
         return fw
 
     # ------------------------------------------------------------------
@@ -121,6 +124,106 @@ class TestFloatingWindowHarperIssues(unittest.TestCase):
             fw._populate_grammar_issues(issues)
         except Exception as exc:  # noqa: BLE001
             self.fail(f"_populate_grammar_issues raised {type(exc).__name__}: {exc}")
+
+    def test_harper_issue_with_suggestion_shows_arrow(self):
+        """A non-empty suggestion must render the green arrow + replacement."""
+        fw = self._make_fw()
+        fw._current_text = "teh quick brown fox"
+        fw._populate_grammar_issues([
+            HarperIssue(
+                original="teh",
+                suggestion="the",
+                reason="spelling",
+                severity="warning",
+                edit=LspTextEdit(
+                    range=LspRange(start=LspPosition(0, 0), end=LspPosition(0, 3)),
+                    newText="the",
+                ),
+            ),
+        ])
+        row = fw._grammar_layout.itemAt(0).widget()
+        labels = [c for c in row.findChildren(QLabel)]
+        main_text = labels[0].text()
+        self.assertIn("&#8594; the", main_text)
+
+    def test_harper_issue_without_suggestion_hides_arrow(self):
+        """An empty suggestion must not render a bare green arrow."""
+        fw = self._make_fw()
+        fw._current_text = "teh quick brown fox"
+        fw._populate_grammar_issues([
+            HarperIssue(original="teh", suggestion="", reason="unknown", severity="warning"),
+        ])
+        row = fw._grammar_layout.itemAt(0).widget()
+        labels = [c for c in row.findChildren(QLabel)]
+        self.assertNotIn("&#8594;", labels[0].text())
+
+    def test_uncheck_issue_recomputes_corrected_text(self):
+        """Unchecking an issue must remove its fix from the corrected text."""
+        fw = self._make_fw()
+        fw._current_text = "teh quick brown fox"
+        issue = HarperIssue(
+            original="teh",
+            suggestion="the",
+            reason="spelling",
+            severity="warning",
+            edit=LspTextEdit(
+                range=LspRange(start=LspPosition(0, 0), end=LspPosition(0, 3)),
+                newText="the",
+            ),
+        )
+        fw._populate_grammar_issues([issue])
+        self.assertEqual(fw._rewrite_texts[0].text_edit.toPlainText(), "the quick brown fox")
+
+        checkboxes = [c for c in fw._grammar_layout.itemAt(0).widget().findChildren(QCheckBox)]
+        self.assertTrue(checkboxes[0].isChecked())
+        checkboxes[0].setChecked(False)
+        QApplication.instance().processEvents()
+
+        self.assertEqual(fw._rewrite_texts[0].text_edit.toPlainText(), "teh quick brown fox")
+        self.assertFalse(issue.enabled)
+
+    def test_recheck_issue_restores_corrected_text(self):
+        """Rechecking a previously unchecked issue must re-apply its fix."""
+        fw = self._make_fw()
+        fw._current_text = "teh quick brown fox"
+        issue = HarperIssue(
+            original="teh",
+            suggestion="the",
+            reason="spelling",
+            severity="warning",
+            edit=LspTextEdit(
+                range=LspRange(start=LspPosition(0, 0), end=LspPosition(0, 3)),
+                newText="the",
+            ),
+        )
+        issue.enabled = False
+        fw._populate_grammar_issues([issue])
+        self.assertEqual(fw._rewrite_texts[0].text_edit.toPlainText(), "teh quick brown fox")
+
+        checkboxes = [c for c in fw._grammar_layout.itemAt(0).widget().findChildren(QCheckBox)]
+        self.assertFalse(checkboxes[0].isChecked())
+        checkboxes[0].setChecked(True)
+        QApplication.instance().processEvents()
+
+        self.assertEqual(fw._rewrite_texts[0].text_edit.toPlainText(), "the quick brown fox")
+        self.assertTrue(issue.enabled)
+
+    def test_harper_layout_hides_custom_instruction(self):
+        """Harper mode must hide the custom-instruction label/entry/button."""
+        fw = self._make_fw()
+        fw._set_harper_layout(True)
+        self.assertFalse(fw._custom_instruction_label.isVisibleTo(fw))
+        self.assertFalse(fw._custom_entry.isVisibleTo(fw))
+        self.assertFalse(fw._custom_btn.isVisibleTo(fw))
+
+    def test_llm_layout_shows_custom_instruction(self):
+        """LLM mode must show the custom-instruction label/entry/button."""
+        fw = self._make_fw()
+        fw._set_harper_layout(True)
+        fw._set_harper_layout(False)
+        self.assertTrue(fw._custom_instruction_label.isVisibleTo(fw))
+        self.assertTrue(fw._custom_entry.isVisibleTo(fw))
+        self.assertTrue(fw._custom_btn.isVisibleTo(fw))
 
     def test_dict_backward_compat(self):
         """``_populate_grammar_issues`` accepts plain-dict issues without error."""

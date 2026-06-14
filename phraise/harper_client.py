@@ -203,13 +203,25 @@ class HarperClient(QObject):
         if request_id not in self._pending_code_actions:
             return
 
-        del self._pending_code_actions[request_id]
-        if edits:
-            self._collected_edits.append(edits[0])
+        diag = self._pending_code_actions.pop(request_id)
+        first_edit = edits[0] if edits else None
+        if first_edit is not None:
+            self._collected_edits.append(first_edit)
 
         if not self._pending_code_actions:
+            edits_by_diagnostic: dict[int, LspTextEdit] = {}
+            for i, d in enumerate(self._last_diagnostics):
+                for edit in self._collected_edits:
+                    if (
+                        edit.range.start.line == d.range.start.line
+                        and edit.range.start.character == d.range.start.character
+                        and edit.range.end.line == d.range.end.line
+                        and edit.range.end.character == d.range.end.character
+                    ):
+                        edits_by_diagnostic[i] = edit
+                        break
             issues = HarperDiagnosticsParser.diagnostics_to_issues(
-                self._last_diagnostics, self._current_text
+                self._last_diagnostics, self._current_text, edits_by_diagnostic
             )
             corrected = HarperFixApplier.apply_fixes(
                 self._current_text, self._collected_edits
