@@ -1,10 +1,13 @@
 # PhrAIse
 
+<img src="phraise/assets/phraise_logo.svg" alt="PhrAIse Logo" width="100"/>
+
 [![License](https://img.shields.io/github/license/hqrrr/Phraise?color=888)](LICENSE)&nbsp;
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2B-4c8eda)](https://github.com/hqrrr/Phraise)&nbsp;
-[![Python](https://img.shields.io/badge/Python-3.11%2B-4c8eda)](https://python.org)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-4c8eda)](https://python.org)&nbsp;
+[![Downloads](https://img.shields.io/github/downloads/hqrrr/Phraise/total?color=4c8eda)](https://github.com/hqrrr/Phraise/releases)
 
-> A system-wide AI writing assistant for Windows. Use your own LLM API keys - no subscription, no vendor lock-in, full control.
+> A system-wide AI writing assistant. Use your own LLM API keys - or run grammar checks locally - no subscription, no vendor lock-in, full control.
 
 <p align="center">
   <sub>
@@ -18,6 +21,7 @@
 - [What It Does](#what-it-does)
 - [Getting Started](#getting-started)
 - [LLM Providers](#llm-providers)
+- [Coding Plan Compatibility](#coding-plan-compatibility)
 - [Configuration](#configuration)
 - [Hotkeys](#hotkeys)
 - [Build](#build)
@@ -34,45 +38,38 @@ Neither is objectively better. They're built for different writing habits. This 
 
 ## What It Does
 
-Select text anywhere, hit a hotkey (Default: Ctrl+C+C), and PhrAIse rewrites or translates it using your configured LLM.
+Select text anywhere, hit a hotkey (Default: `Ctrl+C+C`), and PhrAIse rewrites or translates it using your configured engine.
+
+PhrAIse has two interchangeable engines for the **Optimize** function:
+
+### Local Mode with Harper
+
+[**Harper**](https://github.com/Automattic/harper) is a local, offline grammar engine. No API key, no network request, no data leaves your machine. It catches spelling mistakes, repeated words, missing/extra spaces, wrong articles (`a`/`an`), unclosed quotes, apostrophe issues, and more.
+
+When Harper is assigned to Optimize, **PhrAIse** shows a single corrected version and a list of detected grammar issues. You can toggle individual fixes on or off before replacing the original text.
+
+### LLM Mode - Optimize & Translate
+
+When you assign a configured LLM model to **Optimize** or **Translate**, **PhrAIse** uses your LLM provider:
 
 - **Optimize**: three rewrite versions per request with grammar checking, in any style you define (Concise, Formal, Natural, or custom)
 - **Translate**: translation with auto-detection, one-click replace
 - **Custom instructions**: free-form AI edits with extensible style presets
+
+### Core System Features
+
 - **System integration**: global hotkeys, UIA-based text grab (clipboard-safe), system tray, app blacklist
 - **Configuration**: OpenAI-compatible API, dual model slots, per-function model assignment, custom CSS theming
 
-## Getting Started
-
-### Requirements
-
-- Windows 10 (21H2+) / 11
-- Python 3.11+
-- API key from any OpenAI-compatible LLM provider
-
-### Run from Source
-
-```bash
-pip install -r phraise/requirements.txt
-python -m phraise.main
-```
-
-On first launch, right-click the tray icon or floating ball -> **Settings** -> configure at least one model with your API key.
-
 ## LLM Providers
 
-| Provider           | Status                         |
-|--------------------|--------------------------------|
-| OpenAI             | Built-in                       |
-| Claude (Anthropic) | Built-in                       |
-| Gemini (Google)    | Built-in                       |
-| DeepSeek           | Built-in                       |
-| OpenRouter         | Built-in                       |
-| Kimi (Moonshot)    | Built-in                       |
-| GLM (Zhipu)        | Built-in                       |
-| Qwen (Tongyi)      | Built-in                       |
-| SiliconFlow        | Built-in                       |
-| **Custom**         | Any OpenAI-compatible endpoint |
+The built-in provider list is fetched from **[models.dev](https://github.com/anomalyco/models.dev)** on startup and merged with a curated local fallback. This means new OpenAI-compatible endpoints appear automatically; if the network is unavailable, PhrAIse falls back to the local list.
+
+> ⚠️ **Coding Plan Warning**
+>
+> Most providers define what their coding plans / subscriptions may be used for according to their own documentation. "Coding plans" are generally intended for interactive programming agents (such as OpenCode, Cursor, Codex, etc.), **NOT** for writing assistants like PhrAIse. Using a coding plan in PhrAIse may violate the provider's terms of service and could result in your account being suspended or banned.
+>
+> Please check [Coding Plan Status](Coding_Plan.md) whether PhrAIse is allowed to use their coding plans.
 
 ## Configuration
 
@@ -88,6 +85,31 @@ Settings are in `%APPDATA%/PhrAIse/settings.json`. All configurable through the 
 
 All hotkeys are configurable in **Settings**.
 
+## Getting Started
+
+### Download Pre-built `.exe`
+
+If you just want to run PhrAIse without installing Python, download the latest release from the [GitHub Releases](https://github.com/hqrrr/Phraise/releases) page and run `PhrAIse.exe` directly.
+
+### Run from Source
+
+#### Requirements
+
+- Windows 10 (21H2+) / 11
+- Python 3.11+
+- For LLM mode: API key from any OpenAI-compatible LLM provider
+- For Harper local mode: nothing extra; the Harper binary is bundled
+
+#### Run
+
+```bash
+pip install -r phraise/requirements.txt
+python -m phraise.main
+```
+
+On first launch, right-click the tray icon or floating ball -> **Settings** -> configure at least one model with your API key, or set **Optimize** to **Harper** to use the local grammar engine.
+
+
 ## Build
 
 Package into a standalone `.exe` with PyInstaller:
@@ -97,27 +119,31 @@ python build.py
 # Output: dist/PhrAIse.exe
 ```
 
+Releases will be published on GitHub with downloadable `.exe` files. The download badge at the top of this README will show total downloads once the release workflow is active.
+
 ## Project Structure
 
 ```text
 Phraise/
-├── build.py              # PyInstaller build script
+├── build.py                    # PyInstaller build script
 ├── phraise/
-│   ├── main.py           # Application entry point & lifecycle
-│   ├── config.py         # JSON-based configuration management
-│   ├── i18n.py           # Internationalization
-│   ├── theme.py          # Themes & CSS config
-│   ├── prompts.py        # LLM prompt templates
-│   ├── llm_client.py     # OpenAI-compatible API client
-│   ├── settings_panel.py # Settings dialog (models, styles, triggers, appearance)
-│   ├── floating_ball.py  # Draggable always-on-top orb
-│   ├── floating_window.py# Main window (optimize / translate)
-│   ├── hotkeys.py        # Global hotkey listener
-│   ├── text_grabber.py   # UIA text extraction & replacement
-│   ├── detector.py       # Active window detection
-│   ├── dispatch.py       # Thread-safe main-thread dispatcher
-│   ├── error_log.py      # Error logging
-│   └── assets/           # Icons and resources
+│   ├── main.py                 # Application entry point & lifecycle
+│   ├── config.py               # JSON-based configuration management
+│   ├── i18n.py                 # Internationalization
+│   ├── theme.py                # Themes & CSS config
+│   ├── prompts.py              # LLM prompt templates
+│   ├── llm_client.py           # OpenAI-compatible API client
+│   ├── harper_client.py        # Local Harper grammar engine client
+│   ├── harper_lsp_manager.py   # Harper LSP subprocess manager
+│   ├── settings_panel.py       # Settings dialog (models, styles, triggers, appearance)
+│   ├── floating_ball.py        # Draggable always-on-top orb
+│   ├── floating_window.py      # Main window (optimize / translate)
+│   ├── hotkeys.py              # Global hotkey listener
+│   ├── text_grabber.py         # UIA text extraction & replacement
+│   ├── detector.py             # Active window detection
+│   ├── dispatch.py             # Thread-safe main-thread dispatcher
+│   ├── error_log.py            # Error logging
+│   └── assets/                 # Icons and resources
 └── README.md
 ```
 
