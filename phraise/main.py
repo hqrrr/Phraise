@@ -1,9 +1,7 @@
-import os
 import sys
-import threading
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QFont, QPixmap, QIcon
+from PySide6.QtGui import QPainter, QColor, QPalette, QPen, QBrush, QFont, QPixmap, QIcon
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
 
 from .config import config
@@ -14,6 +12,14 @@ from .floating_ball import FloatingBall
 from .floating_window import FloatingWindow
 from .hotkeys import hotkey_manager
 from .text_grabber import TextGrabber
+from .theme import (
+    apply_theme,
+    get_theme,
+    generate_app_stylesheet,
+    resolve_theme_name,
+    theme_notifier,
+    FullTheme,
+)
 
 
 class PhrAIseApp:
@@ -132,6 +138,7 @@ class PhrAIseApp:
         from .settings_panel import SettingsPanel
         parent = self._window if self._window else None
         dlg = SettingsPanel(parent)
+        dlg.theme_applied.connect(theme_notifier.set_theme)
         dlg.exec()
 
     def _hotkey_trigger(self):
@@ -193,17 +200,19 @@ class PhrAIseApp:
 
     @staticmethod
     def _create_tray_icon() -> QIcon:
+        from .theme import get_theme, theme_notifier
+        colors = get_theme(theme_notifier.current_theme)["colors"]
         size = 64
         pixmap = QPixmap(size, size)
         pixmap.fill(Qt.transparent)
         p = QPainter(pixmap)
         p.setRenderHint(QPainter.Antialiasing)
-        p.setPen(QPen(QColor("#6c5ce7"), 3))
-        p.setBrush(QBrush(QColor("#2b2b2b")))
+        p.setPen(QPen(QColor(colors["accent"]), 3))
+        p.setBrush(QBrush(QColor(colors["bg_darker"])))
         p.drawEllipse(4, 4, size - 8, size - 8)
         font = QFont("Segoe UI", 18, QFont.Bold)
         p.setFont(font)
-        p.setPen(QColor("white"))
+        p.setPen(QColor(colors["white"]))
         p.drawText(pixmap.rect(), Qt.AlignCenter, "AI")
         p.end()
         return QIcon(pixmap)
@@ -221,7 +230,7 @@ def main():
         try:
             import pythoncom
             pythoncom.CoInitializeEx(pythoncom.COINIT_MULTITHREADED)
-        except Exception:
+        except pythoncom.error:
             pass  # Already initialized or incompatible model — continue
 
     app = QApplication(sys.argv)
@@ -231,14 +240,25 @@ def main():
     init_dispatch()
 
     app.setStyle("Fusion")
-    app.setPalette(_dark_palette())
 
-    from .theme import DEFAULT_THEME, generate_app_stylesheet
-    stylesheet = generate_app_stylesheet(DEFAULT_THEME)
+    raw_theme = config.get("appearance", "theme", default="dark")
+    theme_name = resolve_theme_name(raw_theme)
+    theme = get_theme(theme_name)
+    app.setPalette(palette_for_theme(theme))
+
     custom_css = config.get("appearance", "custom_css", default="")
-    if custom_css:
-        stylesheet += "\n" + custom_css
-    app.setStyleSheet(stylesheet)
+    _ = apply_theme(theme_name, app=app, custom_css=custom_css)
+
+    def _on_theme_changed(new_name: str) -> None:
+        theme = get_theme(new_name)
+        app.setPalette(palette_for_theme(theme))
+        stylesheet = generate_app_stylesheet(theme["colors"])
+        live_css = config.get("appearance", "custom_css", default="")
+        if live_css:
+            stylesheet += "\n" + live_css
+        app.setStyleSheet(stylesheet)
+
+    theme_notifier.theme_changed.connect(_on_theme_changed)
 
     from .harper_client import HarperClient
     app.aboutToQuit.connect(lambda: HarperClient.shutdown_all())
@@ -247,21 +267,22 @@ def main():
     phr_app.run()
 
 
-def _dark_palette():
-    from PySide6.QtGui import QPalette
+def palette_for_theme(theme: FullTheme) -> QPalette:
+    """Build a QPalette that maps theme color roles to Qt palette roles."""
+    colors = theme["colors"]
     p = QPalette()
-    p.setColor(QPalette.Window, QColor("#1e1e2e"))
-    p.setColor(QPalette.WindowText, QColor("#cdd6f4"))
-    p.setColor(QPalette.Base, QColor("#313244"))
-    p.setColor(QPalette.AlternateBase, QColor("#1e1e2e"))
-    p.setColor(QPalette.ToolTipBase, QColor("#313244"))
-    p.setColor(QPalette.ToolTipText, QColor("#cdd6f4"))
-    p.setColor(QPalette.Text, QColor("#cdd6f4"))
-    p.setColor(QPalette.Button, QColor("#313244"))
-    p.setColor(QPalette.ButtonText, QColor("#cdd6f4"))
-    p.setColor(QPalette.BrightText, Qt.red)
-    p.setColor(QPalette.Highlight, QColor("#6c5ce7"))
-    p.setColor(QPalette.HighlightedText, QColor("white"))
+    p.setColor(QPalette.Window, QColor(colors["bg"]))
+    p.setColor(QPalette.WindowText, QColor(colors["text"]))
+    p.setColor(QPalette.Base, QColor(colors["bg_darker"]))
+    p.setColor(QPalette.AlternateBase, QColor(colors["surface"]))
+    p.setColor(QPalette.Text, QColor(colors["text"]))
+    p.setColor(QPalette.Button, QColor(colors["surface"]))
+    p.setColor(QPalette.ButtonText, QColor(colors["text"]))
+    p.setColor(QPalette.Highlight, QColor(colors["accent"]))
+    p.setColor(QPalette.HighlightedText, QColor(colors["white"]))
+    p.setColor(QPalette.ToolTipBase, QColor(colors["surface"]))
+    p.setColor(QPalette.ToolTipText, QColor(colors["text"]))
+    p.setColor(QPalette.Link, QColor(colors["accent"]))
     return p
 
 
