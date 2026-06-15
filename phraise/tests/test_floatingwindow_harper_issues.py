@@ -208,6 +208,19 @@ class TestFloatingWindowHarperIssues(unittest.TestCase):
         self.assertEqual(fw._rewrite_texts[0].text_edit.toPlainText(), "the quick brown fox")
         self.assertTrue(issue.enabled)
 
+    def test_harper_layout_hides_style_selector(self):
+        """Harper mode must hide the style selector widget."""
+        fw = self._make_fw()
+        fw._set_harper_layout(True)
+        self.assertFalse(fw._style_widget.isVisibleTo(fw))
+
+    def test_llm_layout_shows_style_selector(self):
+        """LLM mode must show the style selector widget."""
+        fw = self._make_fw()
+        fw._set_harper_layout(True)
+        fw._set_harper_layout(False)
+        self.assertTrue(fw._style_widget.isVisibleTo(fw))
+
     def test_harper_layout_hides_custom_instruction(self):
         """Harper mode must hide the custom-instruction label/entry/button."""
         fw = self._make_fw()
@@ -224,6 +237,61 @@ class TestFloatingWindowHarperIssues(unittest.TestCase):
         self.assertTrue(fw._custom_instruction_label.isVisibleTo(fw))
         self.assertTrue(fw._custom_entry.isVisibleTo(fw))
         self.assertTrue(fw._custom_btn.isVisibleTo(fw))
+
+
+
+    def test_dict_issue_checkbox_hidden(self):
+        """LLM-style dict issues must not render a checkbox at all."""
+        fw = self._make_fw()
+        issues = [
+            {
+                "original": "teh",
+                "suggestion": "the",
+                "reason": "spelling",
+                "severity": "warning",
+            },
+        ]
+        fw._populate_grammar_issues(issues)
+        checkboxes = [c for c in fw._grammar_layout.itemAt(0).widget().findChildren(QCheckBox)]
+        self.assertEqual(len(checkboxes), 0)
+
+    def test_harper_issue_checkbox_visible(self):
+        """Harper issues must still render an interactive checkbox."""
+        fw = self._make_fw()
+        fw._current_text = "teh quick brown fox"
+        fw._populate_grammar_issues([
+            HarperIssue(
+                original="teh",
+                suggestion="the",
+                reason="spelling",
+                severity="warning",
+                edit=LspTextEdit(
+                    range=LspRange(start=LspPosition(0, 0), end=LspPosition(0, 3)),
+                    newText="the",
+                ),
+            ),
+        ])
+        checkboxes = [c for c in fw._grammar_layout.itemAt(0).widget().findChildren(QCheckBox)]
+        self.assertEqual(len(checkboxes), 1)
+        self.assertTrue(checkboxes[0].isEnabled())
+
+    def test_dict_issue_preserves_llm_rewrite_text(self):
+        """Populating LLM grammar issues must not overwrite the LLM rewrite text."""
+        fw = self._make_fw()
+        fw._current_text = "teh quick brown fox"
+        result = {
+            "grammar_issues": [
+                {
+                    "original": "teh",
+                    "suggestion": "the",
+                    "reason": "spelling",
+                    "severity": "warning",
+                },
+            ],
+            "rewrites": [{"label": "A", "text": "LLM rewrite here", "note": ""}],
+        }
+        fw._on_optimize_done(result, None)
+        self.assertEqual(fw._rewrite_texts[0].text_edit.toPlainText(), "LLM rewrite here")
 
     def test_dict_backward_compat(self):
         """``_populate_grammar_issues`` accepts plain-dict issues without error."""

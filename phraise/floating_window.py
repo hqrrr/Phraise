@@ -456,6 +456,7 @@ class FloatingWindow(QWidget):
             btn.clicked.connect(lambda checked, sid=sid: self._on_style_change(sid))
             style_layout.addWidget(btn)
             self._style_buttons[sid] = btn
+        self._style_widget = style_widget
         layout.addWidget(style_widget)
 
         sep = QFrame()
@@ -784,19 +785,18 @@ class FloatingWindow(QWidget):
 
         checkbox = QCheckBox()
         checkbox.setChecked(enabled)
-        checkbox.setEnabled(has_edit)
-        checkbox.setToolTip(t("fw.tooltip.apply_fix") if has_edit else "")
-        checkbox.setStyleSheet("QCheckBox::indicator { width: 14px; height: 14px; }")
-        checkbox.stateChanged.connect(lambda state, i=issue: self._on_issue_enabled_changed(i, state))
-        row_layout.addWidget(checkbox, alignment=Qt.AlignVCenter)
+        if isinstance(issue, HarperIssue):
+            checkbox.setEnabled(has_edit)
+            checkbox.setToolTip(t("fw.tooltip.apply_fix") if has_edit else "")
+            checkbox.setStyleSheet("QCheckBox::indicator { width: 14px; height: 14px; }")
+            checkbox.stateChanged.connect(lambda state, i=issue: self._on_issue_enabled_changed(i, state))
+            row_layout.addWidget(checkbox, alignment=Qt.AlignVCenter)
         return row
 
     def _on_issue_enabled_changed(self, issue, state: int):
-        enabled = state == Qt.CheckState.Checked.value
-        if isinstance(issue, HarperIssue):
-            issue.enabled = enabled
-        else:
-            issue["enabled"] = enabled
+        if not isinstance(issue, HarperIssue):
+            return
+        issue.enabled = state == Qt.CheckState.Checked.value
         self._recompute_corrected_text()
 
     def _recompute_corrected_text(self):
@@ -804,8 +804,6 @@ class FloatingWindow(QWidget):
         for issue in getattr(self, "_grammar_issues", []):
             if isinstance(issue, HarperIssue) and issue.enabled and issue.edit is not None:
                 edits.append(issue.edit)
-            elif not isinstance(issue, HarperIssue) and issue.get("enabled", True) and issue.get("suggestion"):
-                pass
         from .harper_types import HarperFixApplier
         corrected = HarperFixApplier.apply_fixes(self._current_text, edits)
         self._rewrite_texts[0].text_edit.setPlainText(corrected)
@@ -867,9 +865,8 @@ class FloatingWindow(QWidget):
             self._rewrite_texts[2].text_edit.clear()
             self._rewrite_label.setText(t("fw.label.corrected_text"))
             self._model_combo.hide()
-            for btn in self._style_buttons.values():
-                btn.setEnabled(False)
-                btn.setToolTip(t("fw.label.harper_style_disabled"))
+            if hasattr(self, "_style_widget"):
+                self._style_widget.hide()
             if hasattr(self, "_custom_instruction_label"):
                 self._custom_instruction_label.hide()
             if hasattr(self, "_custom_entry"):
@@ -881,9 +878,8 @@ class FloatingWindow(QWidget):
             self._rewrite_texts[2].show()
             self._rewrite_label.setText(t("fw.label.rewrites"))
             self._model_combo.show()
-            for btn in self._style_buttons.values():
-                btn.setEnabled(True)
-                btn.setToolTip("")
+            if hasattr(self, "_style_widget"):
+                self._style_widget.show()
             if hasattr(self, "_custom_instruction_label"):
                 self._custom_instruction_label.show()
             if hasattr(self, "_custom_entry"):
