@@ -7,28 +7,28 @@ from .i18n import t, SOURCE_LANGUAGES, TARGET_LANGUAGES, add_listener, remove_li
 from .llm_client import optimize_text, translate_text, custom_instruction, check_output_fit
 from .text_grabber import TextGrabber
 from .theme import (
-    DEFAULT_THEME as theme,
+    get_theme, theme_notifier,
     btn_style, action_btn_style, style_btn_style,
-    combo_style, tab_style, entry_style, text_edit_style,
-    card_style, titlebar_style, scroll_area_style,
+    combo_style, tab_style, text_edit_style,
+    titlebar_style, scroll_area_style,
     label_style, separator_style, toast_style, rgba,
 )
 
 import html
 import json
-import threading
 from collections.abc import Callable
+from pathlib import Path
 
 import qtawesome as qta
 
 import shiboken6
 
 from PySide6.QtCore import Qt, QPoint, QRect, QSize, QTimer
-from PySide6.QtGui import QFont, QColor, QHideEvent, QMouseEvent, QPainter, QPainterPath, QBrush, QPen
+from PySide6.QtGui import QColor, QHideEvent, QMouseEvent, QPainter, QPainterPath, QBrush, QPen, QIcon
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QTabWidget, QScrollArea, QTextEdit, QComboBox,
-    QFrame, QSizePolicy, QGridLayout, QLayout, QCheckBox
+    QFrame, QSizePolicy, QLayout, QCheckBox
 )
 
 
@@ -176,21 +176,22 @@ class _DragBar(QWidget):
 class _HoverTextEdit(QWidget):
     """Text edit with hover-reveal action buttons (replace / copy)."""
 
-    def __init__(self, parent, on_replace, on_copy):
+    def __init__(self, parent, on_replace, on_copy, theme_colors):
         super().__init__(parent)
         self.setMouseTracking(True)
+        self._theme_colors = theme_colors
 
         self.text_edit = QTextEdit()
         self.text_edit.setReadOnly(True)
         self.text_edit.setMinimumHeight(80)
         self.text_edit.setMaximumHeight(300)
         self.text_edit.setFixedHeight(100)
-        self.text_edit.setStyleSheet(text_edit_style(theme))
+        self.text_edit.setStyleSheet(text_edit_style(theme_colors))
         self.text_edit.setMouseTracking(True)
 
         self._btn_overlay = QWidget(self)
         self._btn_overlay.setStyleSheet(
-            f"background: {rgba(theme['surface'], 220)}; border-radius: 4px; padding: 2px;")
+            f"background: {rgba(theme_colors['surface'], 220)}; border-radius: 4px; padding: 2px;")
         self._btn_overlay.setMouseTracking(True)
         btn_layout = QHBoxLayout(self._btn_overlay)
         btn_layout.setContentsMargins(4, 2, 4, 2)
@@ -198,13 +199,13 @@ class _HoverTextEdit(QWidget):
 
         self._replace_btn = QPushButton(t("fw.btn.replace"))
         self._replace_btn.setFixedSize(80, 22)
-        self._replace_btn.setStyleSheet(action_btn_style(theme, "#6c5ce7"))
+        self._replace_btn.setStyleSheet(action_btn_style(theme_colors, "accent"))
         self._replace_btn.clicked.connect(lambda: on_replace(self.text_edit.toPlainText()))
         btn_layout.addWidget(self._replace_btn)
 
         copy_btn = QPushButton(t("fw.btn.copy"))
         copy_btn.setFixedSize(48, 22)
-        copy_btn.setStyleSheet(action_btn_style(theme, "#45475a"))
+        copy_btn.setStyleSheet(action_btn_style(theme_colors, "surface"))
         copy_btn.clicked.connect(lambda: on_copy(self.text_edit))
         btn_layout.addWidget(copy_btn)
 
@@ -234,12 +235,21 @@ class _HoverTextEdit(QWidget):
             ow, oh,
         )
 
+    def update_theme(self, tc):
+        self._theme_colors = tc
+        self.text_edit.setStyleSheet(text_edit_style(tc))
+        self._btn_overlay.setStyleSheet(
+            f"background: {rgba(tc['surface'], 220)}; border-radius: 4px; padding: 2px;")
+        self._replace_btn.setStyleSheet(action_btn_style(tc, "accent"))
+
 
 class FloatingWindow(QWidget):
     """Main floating window with optimize and translate tabs."""
 
     def __init__(self, grabber: TextGrabber, on_close: Callable | None = None):
         super().__init__()
+        self._theme_colors = get_theme(theme_notifier.current_theme)["colors"]
+        theme_notifier.theme_changed.connect(self._apply_theme)
         self._on_close = on_close
         self._grabber = grabber
         self._current_text: str = ""
@@ -252,6 +262,9 @@ class FloatingWindow(QWidget):
 
         self._setup_window()
         self._build_ui()
+        _icon_path = Path(__file__).parent / "assets" / "ball_icon.png"
+        if _icon_path.exists():
+            self.setWindowIcon(QIcon(str(_icon_path)))
         add_listener(self._retranslate_ui)
 
     @property
@@ -274,8 +287,8 @@ class FloatingWindow(QWidget):
         self.setMaximumSize(700, 800)
 
         self._radius = 12
-        self._bg_color = QColor(theme["bg"])
-        self._border_color = QColor(theme["border"])
+        self._bg_color = QColor(self._theme_colors["bg"])
+        self._border_color = QColor(self._theme_colors["border"])
         self.setAutoFillBackground(False)
 
         self._drag_start = QPoint()
@@ -299,7 +312,7 @@ class FloatingWindow(QWidget):
         # Resize grip indicator (bottom-right corner)
         grip_margin = 8
         grip_size = 14
-        grip_color = QColor(theme["text_muted"])
+        grip_color = QColor(self._theme_colors["text_muted"])
         p.setPen(QPen(grip_color, 1))
         rx, ry = rect.right() - grip_margin, rect.bottom() - grip_margin
         for i in range(3):
@@ -338,80 +351,83 @@ class FloatingWindow(QWidget):
         footer = QWidget()
         footer.setFixedHeight(12)
         footer.setStyleSheet(
-            f"background: {theme['bg_darker']}; border-bottom: 1px solid {theme['border']};"
+            f"background: {self._theme_colors['bg_darker']}; border-bottom: 1px solid {self._theme_colors['border']};"
             f"border-bottom-left-radius: {self._radius}px;"
             f"border-bottom-right-radius: {self._radius}px;")
         main_layout.addWidget(footer)
 
         self._loading_overlay = QWidget(self)
         self._loading_overlay.setStyleSheet(
-            f"background: {rgba(theme['bg'], 200)}; border-radius: 8px;")
+            f"background: {rgba(self._theme_colors['bg'], 200)}; border-radius: 8px;")
         self._loading_overlay.hide()
         overlay_layout = QVBoxLayout(self._loading_overlay)
         overlay_layout.setAlignment(Qt.AlignCenter)
         self._loading_label = QLabel(f"\u23f3 {t('fw.loading')}")
         self._loading_label.setAlignment(Qt.AlignCenter)
-        self._loading_label.setStyleSheet(label_style(theme, "text", "font-size: 16px; font-weight: 600; border: none;"))
+        self._loading_label.setStyleSheet(label_style(self._theme_colors, "text", "font-size: 16px; font-weight: 600; border: none;"))
         overlay_layout.addWidget(self._loading_label)
 
     def _build_titlebar(self, layout: QVBoxLayout):
         self._drag_bar = _DragBar(self, self._titlebar_height)
-        self._drag_bar.setStyleSheet(titlebar_style(theme, self._radius))
+        self._drag_bar.setStyleSheet(titlebar_style(self._theme_colors, self._radius))
         bar_layout = QHBoxLayout(self._drag_bar)
         bar_layout.setContentsMargins(12, 0, 4, 0)
 
         title = QLabel("PhrAIse")
-        title.setStyleSheet(label_style(theme, "text", "font-weight: 600; font-size: 13px;"))
+        title.setStyleSheet(label_style(self._theme_colors, "text", "font-weight: 600; font-size: 13px;"))
         bar_layout.addWidget(title)
         bar_layout.addStretch()
 
         regen_btn = QPushButton()
         regen_btn.setFixedSize(32, 28)
-        regen_btn.setIcon(qta.icon("fa5s.redo", color=theme["text_muted"]))
+        regen_btn.setIcon(qta.icon("fa5s.redo", color=self._theme_colors["text_muted"]))
         regen_btn.setIconSize(regen_btn.size() * 0.5)
-        regen_btn.setStyleSheet(btn_style(theme))
+        regen_btn.setStyleSheet(btn_style(self._theme_colors))
         regen_btn.clicked.connect(self._on_regenerate)
         bar_layout.addWidget(regen_btn)
         self._regenerate_btn = regen_btn
 
         settings_btn = QPushButton()
         settings_btn.setFixedSize(32, 28)
-        settings_btn.setIcon(qta.icon("fa5s.cog", color=theme["text_muted"]))
+        settings_btn.setIcon(qta.icon("fa5s.cog", color=self._theme_colors["text_muted"]))
         settings_btn.setIconSize(settings_btn.size() * 0.55)
-        settings_btn.setStyleSheet(btn_style(theme))
+        settings_btn.setStyleSheet(btn_style(self._theme_colors))
         settings_btn.clicked.connect(self._on_settings)
         bar_layout.addWidget(settings_btn)
 
         pin_btn = QPushButton()
         pin_btn.setFixedSize(32, 28)
-        pin_btn.setIcon(qta.icon("fa5s.thumbtack", color=theme["text_muted"]))
+        pin_btn.setIcon(qta.icon("fa5s.thumbtack", color=self._theme_colors["text_muted"]))
         pin_btn.setIconSize(pin_btn.size() * 0.55)
-        pin_btn.setStyleSheet(btn_style(theme))
+        pin_btn.setStyleSheet(btn_style(self._theme_colors))
         pin_btn.clicked.connect(self._toggle_pin)
         bar_layout.addWidget(pin_btn)
 
         min_btn = QPushButton()
         min_btn.setFixedSize(32, 28)
-        min_btn.setIcon(qta.icon("fa5s.window-minimize", color=theme["text_muted"]))
+        min_btn.setIcon(qta.icon("fa5s.window-minimize", color=self._theme_colors["text_muted"]))
         min_btn.setIconSize(min_btn.size() * 0.45)
-        min_btn.setStyleSheet(btn_style(theme))
+        min_btn.setStyleSheet(btn_style(self._theme_colors))
         min_btn.clicked.connect(self._close)
         bar_layout.addWidget(min_btn)
+        self._min_btn = min_btn
 
         close_btn = QPushButton()
         close_btn.setFixedSize(32, 28)
-        close_btn.setIcon(qta.icon("fa5s.times", color=theme["red"]))
+        close_btn.setIcon(qta.icon("fa5s.times", color=self._theme_colors["red"]))
         close_btn.setIconSize(close_btn.size() * 0.55)
-        close_btn.setStyleSheet(btn_style(theme, "#f38ba8"))
+        close_btn.setStyleSheet(btn_style(self._theme_colors, "red"))
         close_btn.clicked.connect(self._close)
         bar_layout.addWidget(close_btn)
+        self._close_btn = close_btn
         self._pin_btn = pin_btn
+        self._settings_btn = settings_btn
 
         layout.addWidget(self._drag_bar)
 
     def _build_tabs(self, layout: QVBoxLayout):
         self._tabs = QTabWidget()
-        self._tabs.setStyleSheet(tab_style(theme))
+        self._tabs.setStyleSheet(tab_style(self._theme_colors))
         self._tabs.currentChanged.connect(self._on_tab_changed)
 
         self._build_optimize_tab()
@@ -422,7 +438,7 @@ class FloatingWindow(QWidget):
         self._model_combo = NoScrollComboBox(corner)
         self._model_combo.setFixedWidth(140)
         self._model_combo.move(4, 2)
-        self._model_combo.setStyleSheet(combo_style(theme))
+        self._model_combo.setStyleSheet(combo_style(self._theme_colors))
         self._model_combo.currentIndexChanged.connect(self._on_model_combo_changed)
         self._refresh_model_combo()
         self._tabs.setCornerWidget(corner, Qt.TopRightCorner)
@@ -432,7 +448,7 @@ class FloatingWindow(QWidget):
     def _build_optimize_tab(self):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet(scroll_area_style(theme))
+        scroll.setStyleSheet(scroll_area_style(self._theme_colors))
 
         container = QWidget()
         layout = QVBoxLayout(container)
@@ -444,7 +460,7 @@ class FloatingWindow(QWidget):
         style_layout = FlowLayout(style_widget, spacing=4)
         style_layout.setContentsMargins(0, 0, 0, 0)
         self._style_label = QLabel(t("fw.label.style"))
-        self._style_label.setStyleSheet(label_style(theme, "text_muted", "font-size: 12px; font-weight: 500;"))
+        self._style_label.setStyleSheet(label_style(self._theme_colors, "text_muted", "font-size: 12px; font-weight: 500;"))
         style_layout.addWidget(self._style_label)
         self._style_buttons: dict[str, QPushButton] = {}
         for s in styles:
@@ -452,7 +468,7 @@ class FloatingWindow(QWidget):
             btn.setFixedSize(80, 26)
             sid = s["id"]
             active = sid == self._current_style
-            btn.setStyleSheet(style_btn_style(theme, active))
+            btn.setStyleSheet(style_btn_style(self._theme_colors, active))
             btn.clicked.connect(lambda checked, sid=sid: self._on_style_change(sid))
             style_layout.addWidget(btn)
             self._style_buttons[sid] = btn
@@ -461,12 +477,12 @@ class FloatingWindow(QWidget):
 
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
-        sep.setStyleSheet(separator_style(theme))
+        sep.setStyleSheet(separator_style(self._theme_colors))
         layout.addWidget(sep)
 
         # Grammar issues section
         self._grammar_header = QLabel(t("fw.label.grammar_expanded"))
-        self._grammar_header.setStyleSheet(label_style(theme, "text_muted", "font-size: 13px; font-weight: 600; margin-top: 6px;"))
+        self._grammar_header.setStyleSheet(label_style(self._theme_colors, "text_muted", "font-size: 13px; font-weight: 600; margin-top: 6px;"))
         self._grammar_header.setCursor(Qt.PointingHandCursor)
         self._grammar_header.mousePressEvent = lambda e: self._toggle_grammar_section()
         layout.addWidget(self._grammar_header)
@@ -484,7 +500,7 @@ class FloatingWindow(QWidget):
         layout.addWidget(self._rewrite_label)
         self._rewrite_texts: list[_HoverTextEdit] = []
         for i in range(3):
-            hover_edit = _HoverTextEdit(container, self._do_replace, self._on_copy_text)
+            hover_edit = _HoverTextEdit(container, self._do_replace, self._on_copy_text, self._theme_colors)
             hover_edit.text_edit.textChanged.connect(
                 lambda he=hover_edit: FloatingWindow._auto_resize_text_edit(he.text_edit))
             layout.addWidget(hover_edit)
@@ -492,7 +508,7 @@ class FloatingWindow(QWidget):
 
         sep2 = QFrame()
         sep2.setFrameShape(QFrame.HLine)
-        sep2.setStyleSheet(separator_style(theme))
+        sep2.setStyleSheet(separator_style(self._theme_colors))
         layout.addWidget(sep2)
 
         self._custom_instruction_label = QLabel(t("fw.label.custom_instruction"))
@@ -501,24 +517,25 @@ class FloatingWindow(QWidget):
         self._custom_entry.setMinimumHeight(40)
         self._custom_entry.setMaximumHeight(120)
         self._custom_entry.setFixedHeight(40)
-        self._custom_entry.setStyleSheet(text_edit_style(theme))
+        self._custom_entry.setStyleSheet(text_edit_style(self._theme_colors))
         self._custom_entry.textChanged.connect(lambda: FloatingWindow._auto_resize_text_edit(self._custom_entry))
         layout.addWidget(self._custom_entry)
 
         self._custom_btn = QPushButton(t("fw.btn.generate"))
         self._custom_btn.setFixedSize(80, 26)
-        self._custom_btn.setStyleSheet(action_btn_style(theme, "#45475a"))
+        self._custom_btn.setStyleSheet(action_btn_style(self._theme_colors, "surface"))
         self._custom_btn.clicked.connect(self._on_custom_generate)
         layout.addWidget(self._custom_btn)
         layout.addStretch()
 
         scroll.setWidget(container)
         self._tabs.addTab(scroll, t("fw.tab.optimize"))
+        self._optimize_scroll = scroll
 
     def _build_translate_tab(self):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet(scroll_area_style(theme))
+        scroll.setStyleSheet(scroll_area_style(self._theme_colors))
 
         container = QWidget()
         layout = QVBoxLayout(container)
@@ -532,7 +549,7 @@ class FloatingWindow(QWidget):
         lang_layout.addWidget(self._source_lang_label)
         self._source_lang = NoScrollComboBox()
         self._source_lang.setFixedWidth(140)  # wider for full names
-        self._source_lang.setStyleSheet(combo_style(theme))
+        self._source_lang.setStyleSheet(combo_style(self._theme_colors))
         for display_name, code in SOURCE_LANGUAGES:
             self._source_lang.addItem(display_name, code)
         # Set current based on saved config code
@@ -548,7 +565,7 @@ class FloatingWindow(QWidget):
         lang_layout.addWidget(self._target_lang_label)
         self._target_lang = NoScrollComboBox()
         self._target_lang.setFixedWidth(140)  # wider for full names
-        self._target_lang.setStyleSheet(combo_style(theme))
+        self._target_lang.setStyleSheet(combo_style(self._theme_colors))
         for display_name, code in TARGET_LANGUAGES:
             self._target_lang.addItem(display_name, code)
         saved_target = config.get("translation", "target_lang", default="zh-CN")
@@ -578,7 +595,7 @@ class FloatingWindow(QWidget):
 
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
-        sep.setStyleSheet(separator_style(theme))
+        sep.setStyleSheet(separator_style(self._theme_colors))
         layout.addWidget(sep)
 
         self._translation_result_label = QLabel(t("fw.label.translation_result"))
@@ -587,7 +604,7 @@ class FloatingWindow(QWidget):
         self._translation_text.setReadOnly(True)
         self._translation_text.setMinimumHeight(60)
         self._translation_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self._translation_text.setStyleSheet(text_edit_style(theme))
+        self._translation_text.setStyleSheet(text_edit_style(self._theme_colors))
         layout.addWidget(self._translation_text, 1)
 
         trans_btn_row = QWidget()
@@ -595,12 +612,12 @@ class FloatingWindow(QWidget):
         trans_btn_layout.setContentsMargins(0, 4, 0, 0)
         self._trans_replace_btn = QPushButton(t("fw.btn.replace_original"))
         self._trans_replace_btn.setFixedSize(130, 24)
-        self._trans_replace_btn.setStyleSheet(action_btn_style(theme, "#6c5ce7"))
+        self._trans_replace_btn.setStyleSheet(action_btn_style(self._theme_colors, "accent"))
         self._trans_replace_btn.clicked.connect(lambda checked=False: self._do_replace(self._translation_text.toPlainText()))
         trans_btn_layout.addWidget(self._trans_replace_btn)
         self._trans_copy_btn = QPushButton(t("fw.btn.copy"))
         self._trans_copy_btn.setFixedSize(50, 24)
-        self._trans_copy_btn.setStyleSheet(action_btn_style(theme, "#45475a"))
+        self._trans_copy_btn.setStyleSheet(action_btn_style(self._theme_colors, "surface"))
         self._trans_copy_btn.clicked.connect(lambda checked=False: self._on_copy_text(self._translation_text))
         trans_btn_layout.addWidget(self._trans_copy_btn)
         trans_btn_layout.addStretch()
@@ -608,6 +625,7 @@ class FloatingWindow(QWidget):
 
         scroll.setWidget(container)
         self._tabs.addTab(scroll, t("fw.tab.translate"))
+        self._translate_scroll = scroll
 
     # ---- Event handlers ----
 
@@ -726,7 +744,7 @@ class FloatingWindow(QWidget):
 
         if not issues:
             no_issues = QLabel(t("fw.no_issues"))
-            no_issues.setStyleSheet(label_style(theme, "green", "font-size: 12px; font-weight: 500;"))
+            no_issues.setStyleSheet(label_style(self._theme_colors, "green", "font-size: 12px; font-weight: 500;"))
             self._grammar_layout.addWidget(no_issues)
             return
 
@@ -756,7 +774,7 @@ class FloatingWindow(QWidget):
 
         row = QWidget()
         row.setStyleSheet(
-            f"background: {theme['surface']}; border: 1px solid {theme['border']}; "
+            f"background: {self._theme_colors['surface']}; border: 1px solid {self._theme_colors['border']}; "
             f"border-radius: 4px; padding: 2px;"
         )
         row_layout = QHBoxLayout(row)
@@ -768,19 +786,21 @@ class FloatingWindow(QWidget):
         text_layout.setContentsMargins(0, 0, 0, 0)
         text_layout.setSpacing(1)
 
-        badge_color = theme["red"] if severity == "error" else theme["orange"]
+        badge_color = self._theme_colors["red"] if severity == "error" else self._theme_colors["orange"]
         main_html = (
             f"<span style='color:{badge_color};font-size:11px;'>&#9679;</span> "
-            f"<s style='color:{theme['red']};font-size:11px;'>{original_escaped}</s>"
+            f"<s style='color:{self._theme_colors['red']};font-size:11px;'>{original_escaped}</s>"
         )
         if suggestion_escaped:
             main_html += (
-                f" <span style='color:{theme['green']};font-size:11px;'>&#8594; {suggestion_escaped}</span>"
+                f" <span style='color:{self._theme_colors['green']};font-size:11px;'>&#8594; {suggestion_escaped}</span>"
             )
         main_label = QLabel(main_html)
         main_label.setWordWrap(True)
         main_label.setTextFormat(Qt.RichText)
-        main_label.setStyleSheet(f"font-size: 11px; color: {theme['text']}; background: transparent; border: none;")
+        main_label.setStyleSheet(f"font-size: 11px; color: {self._theme_colors['text']}; background: transparent; border: none;")
+        if reason_escaped:
+            main_label.setToolTip(reason_escaped)
         row_layout.addWidget(main_label, 1, alignment=Qt.AlignVCenter)
 
         checkbox = QCheckBox()
@@ -850,7 +870,7 @@ class FloatingWindow(QWidget):
         self._current_style = style_id
         config.set("floating_window", "last_style", value=style_id)
         for sid, btn in self._style_buttons.items():
-            btn.setStyleSheet(style_btn_style(theme, sid == style_id))
+            btn.setStyleSheet(style_btn_style(self._theme_colors, sid == style_id))
         if self._current_text:
             self._do_optimize()
 
@@ -926,7 +946,7 @@ class FloatingWindow(QWidget):
                     try:
                         prev.finished.disconnect()
                     except Exception:
-                        pass
+                        pass  # Signal may already be disconnected; ignore.
                 self._active_client = client
 
                 # Connect to finished signal for async results
@@ -1163,7 +1183,7 @@ class FloatingWindow(QWidget):
 
     def _show_toast(self, message: str):
         toast = QLabel(message, self)
-        toast.setStyleSheet(toast_style(theme))
+        toast.setStyleSheet(toast_style(self._theme_colors))
         toast.setAttribute(Qt.WA_DeleteOnClose, True)
         toast.adjustSize()
         toast.move((self.width() - toast.width()) // 2, self.height() - 40)
@@ -1180,9 +1200,9 @@ class FloatingWindow(QWidget):
 
     def _set_loading_state(self, loading: bool):
         if loading:
-            self._regenerate_btn.setIcon(qta.icon("fa5s.spinner", color=theme["yellow"]))
+            self._regenerate_btn.setIcon(qta.icon("fa5s.spinner", color=self._theme_colors["yellow"]))
         else:
-            self._regenerate_btn.setIcon(qta.icon("fa5s.redo", color=theme["text_muted"]))
+            self._regenerate_btn.setIcon(qta.icon("fa5s.redo", color=self._theme_colors["text_muted"]))
         if loading:
             self._loading_overlay.show()
             self._loading_overlay.raise_()
@@ -1197,7 +1217,7 @@ class FloatingWindow(QWidget):
         else:
             flags &= ~Qt.WindowStaysOnTopHint
         self.setWindowFlags(flags)
-        pin_color = theme["text_muted"] if self._pinned else theme["surface_hover"]
+        pin_color = self._theme_colors["text_muted"] if self._pinned else self._theme_colors["surface_hover"]
         self._pin_btn.setIcon(qta.icon("fa5s.thumbtack", color=pin_color))
         self.show()
 
@@ -1206,6 +1226,58 @@ class FloatingWindow(QWidget):
         if hasattr(self, '_tabs'):
             self._tabs.setTabText(0, t("fw.tab.optimize"))
             self._tabs.setTabText(1, t("fw.tab.translate"))
+
+    def _apply_theme(self, name: str):
+        tc = get_theme(name)["colors"]
+        self._theme_colors = tc
+        self._bg_color = QColor(tc["bg"])
+        self._border_color = QColor(tc["border"])
+
+        self._drag_bar.setStyleSheet(titlebar_style(tc, self._radius))
+        self._settings_btn.setIcon(qta.icon("fa5s.cog", color=tc["text_muted"]))
+        self._settings_btn.setStyleSheet(btn_style(tc))
+        self._min_btn.setIcon(qta.icon("fa5s.window-minimize", color=tc["text_muted"]))
+        self._min_btn.setStyleSheet(btn_style(tc))
+        self._close_btn.setIcon(qta.icon("fa5s.times", color=tc["red"]))
+        self._close_btn.setStyleSheet(btn_style(tc, "red"))
+        self._regenerate_btn.setIcon(qta.icon("fa5s.redo", color=tc["text_muted"]))
+        self._regenerate_btn.setStyleSheet(btn_style(tc))
+
+        self._tabs.setStyleSheet(tab_style(tc))
+        if self._model_combo is not None:
+            self._model_combo.setStyleSheet(combo_style(tc))
+
+        self._optimize_scroll.setStyleSheet(scroll_area_style(tc))
+        self._style_label.setStyleSheet(label_style(tc, "text_muted", "font-size: 12px; font-weight: 500;"))
+        active_sid = self._current_style
+        for sid, btn in self._style_buttons.items():
+            btn.setStyleSheet(style_btn_style(tc, sid == active_sid))
+        self._grammar_header.setStyleSheet(label_style(tc, "text_muted", "font-size: 13px; font-weight: 600; margin-top: 6px;"))
+        if hasattr(self, '_custom_entry') and self._custom_entry is not None:
+            self._custom_entry.setStyleSheet(text_edit_style(tc))
+        if hasattr(self, '_custom_btn') and self._custom_btn is not None:
+            self._custom_btn.setStyleSheet(action_btn_style(tc, "surface"))
+
+        self._translate_scroll.setStyleSheet(scroll_area_style(tc))
+        self._source_lang.setStyleSheet(combo_style(tc))
+        self._target_lang.setStyleSheet(combo_style(tc))
+        self._translation_text.setStyleSheet(text_edit_style(tc))
+        self._trans_replace_btn.setStyleSheet(action_btn_style(tc, "accent"))
+        self._trans_copy_btn.setStyleSheet(action_btn_style(tc, "surface"))
+
+        self._loading_overlay.setStyleSheet(
+            f"background: {rgba(tc['bg'], 200)}; border-radius: 8px;")
+        self._loading_label.setStyleSheet(
+            label_style(tc, "text", "font-size: 16px; font-weight: 600; border: none;"))
+
+        for he in self._rewrite_texts:
+            he.update_theme(tc)
+
+        pin_color = tc["text_muted"] if self._pinned else tc["surface_hover"]
+        self._pin_btn.setIcon(qta.icon("fa5s.thumbtack", color=pin_color))
+        self._pin_btn.setStyleSheet(btn_style(tc))
+
+        self.update()
 
     def _close(self):
         self._save_geometry()

@@ -453,8 +453,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "zh-CN": "自定义 CSS:",
     },
     "settings.placeholder.css": {
-        "en": "/* ── Custom CSS template — uncomment and modify ──────────────\n * Examples:\n * QPushButton { border-radius: 8px; }\n * QComboBox { border: 2px solid #6c5ce7; }\n * QTextEdit { background: #11111b; }\n * ──────────────────────────────────────────────────────── */",
-        "zh-CN": "/* ── 自定义 CSS 模板 — 取消注释即可修改 ──────────────\n * 示例：\n * QPushButton { border-radius: 8px; }\n * QComboBox { border: 2px solid #6c5ce7; }\n * QTextEdit { background: #11111b; }\n * ──────────────────────────────────────────────────────── */",
+        "en": "/* ── Custom CSS template — uncomment and modify ──────────────\n * Examples:\n * QPushButton { border-radius: 8px; }\n * QComboBox { border: 2px solid rgb(108,92,231); }\n * QTextEdit { background: rgb(17,17,27); }\n * ──────────────────────────────────────────────────────── */",
+        "zh-CN": "/* ── 自定义 CSS 模板 — 取消注释即可修改 ──────────────\n * 示例：\n * QPushButton { border-radius: 8px; }\n * QComboBox { border: 2px solid rgb(108,92,231); }\n * QTextEdit { background: rgb(17,17,27); }\n * ──────────────────────────────────────────────────────── */",
     },
     "settings.btn.validate": {
         "en": "Validate",

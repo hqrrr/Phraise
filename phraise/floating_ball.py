@@ -5,11 +5,14 @@ import qtawesome as qta
 
 from PySide6.QtCore import Qt, QPoint, QRect, QTimer
 from PySide6.QtGui import QPainter, QColor, QFont, QPen, QRegion, QPixmap
-from PySide6.QtWidgets import QApplication, QWidget, QMenu
+from PySide6.QtWidgets import QApplication, QWidget
 
 from .config import config
+from .theme import get_theme, theme_notifier
 
 ICON_PATH = Path(__file__).parent / "assets" / "ball_icon.png"
+ICON_PATH_PNG = ICON_PATH
+ICON_PATH_SVG = Path(__file__).parent / "assets" / "ball_icon.svg"
 
 
 class FloatingBall(QWidget):
@@ -41,10 +44,24 @@ class FloatingBall(QWidget):
         self._click_timer.timeout.connect(self._single_click)
         self._pending_click = False
 
-        if ICON_PATH.exists():
-            self._icon = QPixmap(str(ICON_PATH))
-        else:
-            self._icon = None
+        self._icon = None
+        try:
+            from PySide6.QtSvg import QSvgRenderer
+            if ICON_PATH_SVG.exists():
+                renderer = QSvgRenderer(str(ICON_PATH_SVG))
+                pm = QPixmap(ball_size, ball_size)
+                pm.fill(Qt.transparent)
+                p = QPainter(pm)
+                if renderer.render(p):
+                    self._icon = pm
+                p.end()
+        except ImportError:
+            pass  # QSvgRenderer not available; fall back to PNG/text.
+        if self._icon is None and ICON_PATH_PNG.exists():
+            self._icon = QPixmap(str(ICON_PATH_PNG))
+
+        self._theme_colors = get_theme(theme_notifier.current_theme)["colors"]
+        theme_notifier.theme_changed.connect(self._on_theme_changed)
 
     def paintEvent(self, event):
         p = QPainter(self)
@@ -52,10 +69,10 @@ class FloatingBall(QWidget):
 
         size = self.width()
         margin = 2
-        accent_color = QColor("#6c5ce7")
+        accent_color = QColor(self._theme_colors["accent"])
 
         p.setPen(QPen(accent_color.lighter(120), 2))
-        p.setBrush(QColor("#1e1e2e"))
+        p.setBrush(QColor(self._theme_colors["bg"]))
         p.drawEllipse(margin, margin, size - 2 * margin, size - 2 * margin)
 
         if self._icon:
@@ -69,7 +86,7 @@ class FloatingBall(QWidget):
             text_size = max(9, size // 4)
             font = QFont("Segoe UI", text_size, QFont.Bold)
             p.setFont(font)
-            p.setPen(QColor("#cdd6f4"))
+            p.setPen(QColor(self._theme_colors["text"]))
             p.drawText(QRect(0, 0, size, size - 2), Qt.AlignCenter, "AI")
             pencil_size = max(12, int(size * 0.3))
             pencil_pm = qta.icon("fa5s.pencil-alt", color=accent_color).pixmap(pencil_size, pencil_size)
@@ -115,6 +132,10 @@ class FloatingBall(QWidget):
 
     def _single_click(self):
         self._pending_click = False
+
+    def _on_theme_changed(self, name: str) -> None:
+        self._theme_colors = get_theme(name)["colors"]
+        self.update()
 
     def _save_position(self):
         config.update_section("floating_ball", {
