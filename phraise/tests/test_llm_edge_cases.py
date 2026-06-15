@@ -17,6 +17,13 @@ import phraise.llm_client as llm
 class TestContentFilterFinishReason(unittest.TestCase):
     """content_filter finish_reason → on_done called with i18n error."""
 
+    def setUp(self):
+        self._lang_patch = patch("phraise.i18n.get_language", return_value="en")
+        self._lang_patch.start()
+
+    def tearDown(self):
+        self._lang_patch.stop()
+
     def test_content_filter_triggers_before_json_parse(self):
         """Mock response with finish_reason='content_filter' → on_done(None, error)."""
         captured_result, captured_error = None, None
@@ -62,6 +69,13 @@ class TestContentFilterFinishReason(unittest.TestCase):
 
 class TestCustomInstructionEmptyValidation(unittest.TestCase):
     """Empty instruction → error returned synchronously, no API call."""
+
+    def setUp(self):
+        self._lang_patch = patch("phraise.i18n.get_language", return_value="en")
+        self._lang_patch.start()
+
+    def tearDown(self):
+        self._lang_patch.stop()
 
     def test_empty_string_returns_error_no_api_call(self):
         captured = []

@@ -281,7 +281,10 @@ class TestSizingTokenTypes(unittest.TestCase):
                     )
 
     def test_known_sizing_defaults(self):
-        self.assertEqual(DEFAULT_SIZING["font_size_base"], 12)
+        self.assertEqual(DEFAULT_SIZING["font_size_sm"], 12)
+        self.assertEqual(DEFAULT_SIZING["font_size_base"], 13)
+        self.assertEqual(DEFAULT_SIZING["font_size_md"], 14)
+        self.assertEqual(DEFAULT_SIZING["font_size_lg"], 15)
         self.assertEqual(DEFAULT_SIZING["font_weight_normal"], 400)
         self.assertEqual(DEFAULT_SIZING["padding_btn_v"], 2)
         self.assertEqual(DEFAULT_SIZING["radius_lg"], 6)

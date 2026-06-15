@@ -4,7 +4,7 @@ from .provider_manager import get_providers, init_providers
 from .theme import (
     combo_style, entry_style, btn_style, tab_style, action_btn_style,
     label_style, text_edit_style, get_theme, theme_notifier,
-    resolve_theme_name, rgba, list_themes,
+    resolve_theme_name, rgba, list_themes, FONT_FAMILY_MONO,
 )
 
 import threading
@@ -146,8 +146,11 @@ class SettingsPanel(QDialog):
         try:
             combo.clear()
             for provider in get_providers():
-                label = provider.get("label", provider.get("id", ""))
-                combo.addItem(label, provider.get("id", ""))
+                pid = provider.get("id", "")
+                label = t(f"provider.{pid}")
+                if label == f"provider.{pid}":
+                    label = provider.get("label", pid)
+                combo.addItem(label, pid)
             combo.addItem(t("settings.provider_custom"), "custom")
         finally:
             combo.blockSignals(False)
@@ -247,15 +250,21 @@ class SettingsPanel(QDialog):
         dialect_row = QWidget()
         drl = QHBoxLayout(dialect_row)
         drl.setContentsMargins(0, 0, 0, 0)
-        dialect_lbl = QLabel(t("settings.label.harper_dialect"))
-        dialect_lbl.setFixedWidth(120)
-        dialect_lbl.setStyleSheet(label_style(self._theme_colors, "text_muted"))
-        drl.addWidget(dialect_lbl)
+        self._lbl_harper_dialect = QLabel(t("settings.label.harper_dialect"))
+        self._lbl_harper_dialect.setFixedWidth(120)
+        self._lbl_harper_dialect.setStyleSheet(label_style(self._theme_colors, "text_muted"))
+        drl.addWidget(self._lbl_harper_dialect)
 
         self._harper_dialect = NoScrollComboBox()
-        dialects = ["American", "British", "Australian", "Canadian", "Indian"]
-        for d in dialects:
-            self._harper_dialect.addItem(d, d)
+        dialects = [
+            (t("settings.dialect.american"), "American"),
+            (t("settings.dialect.british"), "British"),
+            (t("settings.dialect.australian"), "Australian"),
+            (t("settings.dialect.canadian"), "Canadian"),
+            (t("settings.dialect.indian"), "Indian"),
+        ]
+        for display, data in dialects:
+            self._harper_dialect.addItem(display, data)
         current_dialect = config.get("harper", "dialect", default="American")
         idx = self._harper_dialect.findData(current_dialect)
         if idx >= 0:
@@ -307,10 +316,10 @@ class SettingsPanel(QDialog):
         row = QWidget()
         rl = QHBoxLayout(row)
         rl.setContentsMargins(0, 0, 0, 0)
-        lbl = QLabel("Provider:")
-        lbl.setFixedWidth(120)
-        lbl.setStyleSheet(label_style(self._theme_colors, "text_muted"))
-        rl.addWidget(lbl)
+        self._lbl_provider = QLabel(t("settings.label.provider"))
+        self._lbl_provider.setFixedWidth(120)
+        self._lbl_provider.setStyleSheet(label_style(self._theme_colors, "text_muted"))
+        rl.addWidget(self._lbl_provider)
 
         combo = self._build_searchable_combo()
         self._populate_provider_combo(combo)
@@ -322,10 +331,10 @@ class SettingsPanel(QDialog):
         api_base_row = QWidget()
         abl = QHBoxLayout(api_base_row)
         abl.setContentsMargins(0, 0, 0, 0)
-        api_lbl = QLabel("API Base:")
-        api_lbl.setFixedWidth(120)
-        api_lbl.setStyleSheet(label_style(self._theme_colors, "text_muted"))
-        abl.addWidget(api_lbl)
+        self._lbl_api_base = QLabel(t("settings.label.api_base"))
+        self._lbl_api_base.setFixedWidth(120)
+        self._lbl_api_base.setStyleSheet(label_style(self._theme_colors, "text_muted"))
+        abl.addWidget(self._lbl_api_base)
         api_base_entry = QLineEdit(cfg.get("api_base", ""))
         api_base_entry.setStyleSheet(entry_style(self._theme_colors))
         abl.addWidget(api_base_entry, 1)
@@ -370,16 +379,16 @@ class SettingsPanel(QDialog):
         entries["provider_combo"] = provider_combo
         entries["api_base"] = api_base_entry
 
-        entries["api_key"] = self._add_entry(layout, "API Key:", cfg.get("api_key", ""), True)
+        entries["api_key"], self._lbl_api_key = self._add_entry(layout, t("settings.label.api_key"), cfg.get("api_key", ""), True)
 
         model_name = cfg.get("model_name", "")
         model_row = QWidget()
         ml = QHBoxLayout(model_row)
         ml.setContentsMargins(0, 0, 0, 0)
-        model_lbl = QLabel("Model Name:")
-        model_lbl.setFixedWidth(120)
-        model_lbl.setStyleSheet(label_style(self._theme_colors, "text_muted"))
-        ml.addWidget(model_lbl)
+        self._lbl_model_name = QLabel(t("settings.label.model_name"))
+        self._lbl_model_name.setFixedWidth(120)
+        self._lbl_model_name.setStyleSheet(label_style(self._theme_colors, "text_muted"))
+        ml.addWidget(self._lbl_model_name)
         model_combo = NoScrollComboBox()
         model_combo.setEditable(True)
         model_combo.setInsertPolicy(NoScrollComboBox.NoInsert)
@@ -405,10 +414,10 @@ class SettingsPanel(QDialog):
         temp_row = QWidget()
         tl = QHBoxLayout(temp_row)
         tl.setContentsMargins(0, 0, 0, 0)
-        temp_lbl = QLabel("Temperature:")
-        temp_lbl.setFixedWidth(120)
-        temp_lbl.setStyleSheet(label_style(self._theme_colors, "text_muted"))
-        tl.addWidget(temp_lbl)
+        self._lbl_temperature = QLabel(t("settings.label.temperature"))
+        self._lbl_temperature.setFixedWidth(120)
+        self._lbl_temperature.setStyleSheet(label_style(self._theme_colors, "text_muted"))
+        tl.addWidget(self._lbl_temperature)
         min_lbl = QLabel("\U0001f52c")
         min_lbl.setStyleSheet(label_style(self._theme_colors, "text_muted", "font-size: 14px;"))
         min_lbl.setToolTip(t("settings.tooltip.precise"))
@@ -431,8 +440,8 @@ class SettingsPanel(QDialog):
         layout.addWidget(temp_row)
         entries["temperature_slider"] = slider
 
-        entries["max_tokens"] = self._add_entry(layout, "Max Tokens:", str(cfg.get("max_tokens", 1024)))
-        entries["extra_params"] = self._add_entry(layout, t("settings.label.extra_params"), cfg.get("extra_params", ""))
+        entries["max_tokens"], self._lbl_max_tokens = self._add_entry(layout, t("settings.label.max_tokens"), str(cfg.get("max_tokens", 1024)))
+        entries["extra_params"], _ = self._add_entry(layout, t("settings.label.extra_params"), cfg.get("extra_params", ""))
         entries["extra_params"].setPlaceholderText(t("settings.placeholder.extra_params"))
 
         btn_row = QWidget()
@@ -580,10 +589,10 @@ class SettingsPanel(QDialog):
         header = QWidget()
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(6, 2, 6, 2)
-        hl_id = QLabel("ID")
-        hl_id.setFixedWidth(80)
-        hl_id.setStyleSheet(label_style(self._theme_colors, "text_muted", "font-weight: bold; font-size: 11px;"))
-        header_layout.addWidget(hl_id)
+        self._lbl_style_id = QLabel(t("settings.header.style_id"))
+        self._lbl_style_id.setFixedWidth(80)
+        self._lbl_style_id.setStyleSheet(label_style(self._theme_colors, "text_muted", "font-weight: bold; font-size: 11px;"))
+        header_layout.addWidget(self._lbl_style_id)
         hl_label = QLabel(t("settings.header.style_label"))
         hl_label.setFixedWidth(80)
         hl_label.setStyleSheet(label_style(self._theme_colors, "text_muted", "font-weight: bold; font-size: 11px;"))
@@ -638,7 +647,7 @@ class SettingsPanel(QDialog):
         self._style_add_btn = add_btn
 
         restart_styles = QLabel(t("settings.restart_required"))
-        restart_styles.setStyleSheet(label_style(self._theme_colors, "yellow", "font-size: 10px; padding-left: 4px;"))
+        restart_styles.setStyleSheet(label_style(self._theme_colors, "yellow", "font-size: 12px; padding-left: 4px;"))
         layout.addWidget(restart_styles)
 
         self._update_style_delete_buttons()
@@ -725,7 +734,7 @@ class SettingsPanel(QDialog):
             layout, t("settings.label.toggle_ball"), trigger_cfg.get("hotkey_toggle_ball", "ctrl+shift+b"))
 
         restart_lbl = QLabel(t("settings.restart_required"))
-        restart_lbl.setStyleSheet(label_style(self._theme_colors, "yellow", "font-size: 10px; padding-left: 120px;"))
+        restart_lbl.setStyleSheet(label_style(self._theme_colors, "yellow", "font-size: 12px; padding-left: 120px;"))
         layout.addWidget(restart_lbl)
 
         layout.addStretch()
@@ -894,7 +903,7 @@ class SettingsPanel(QDialog):
         self._startup_cb.setStyleSheet(label_style(self._theme_colors, "text"))
         layout.addWidget(self._startup_cb)
         rl_setup = QLabel(t("settings.restart_required"))
-        rl_setup.setStyleSheet(label_style(self._theme_colors, "yellow", "font-size: 10px; padding-left: 4px;"))
+        rl_setup.setStyleSheet(label_style(self._theme_colors, "yellow", "font-size: 12px; padding-left: 4px;"))
         layout.addWidget(rl_setup)
 
         self._start_min_cb = QCheckBox(t("settings.checkbox.start_minimized"))
@@ -909,11 +918,11 @@ class SettingsPanel(QDialog):
 
         layout.addSpacing(12)
         layout.addWidget(QLabel(t("settings.section.ball")))
-        self._ball_opacity = self._add_entry(layout, t("settings.label.opacity"), str(ball_cfg.get("opacity", 0.50)))
-        self._ball_size = self._add_entry(layout, t("settings.label.ball_size"), str(ball_cfg.get("size", 30)))
+        self._ball_opacity, _ = self._add_entry(layout, t("settings.label.opacity"), str(ball_cfg.get("opacity", 0.50)))
+        self._ball_size, _ = self._add_entry(layout, t("settings.label.ball_size"), str(ball_cfg.get("size", 30)))
 
         restart_appear = QLabel(t("settings.restart_required"))
-        restart_appear.setStyleSheet(label_style(self._theme_colors, "yellow", "font-size: 10px; padding-left: 4px;"))
+        restart_appear.setStyleSheet(label_style(self._theme_colors, "yellow", "font-size: 12px; padding-left: 4px;"))
         layout.addWidget(restart_appear)
 
         # ── Custom CSS section ──────────────────────────────────────────
@@ -923,10 +932,10 @@ class SettingsPanel(QDialog):
         self._custom_css_editor.setMinimumHeight(120)
         self._custom_css_editor.setMaximumHeight(200)
         from PySide6.QtGui import QFont
-        self._custom_css_editor.setFont(QFont("Consolas", 11))
+        self._custom_css_editor.setFont(QFont(FONT_FAMILY_MONO.replace('"', "").split(",")[0].strip(), 13))
         self._custom_css_editor.setStyleSheet(
             text_edit_style(self._theme_colors)
-            + " QTextEdit { font-family: Consolas; font-size: 11px; }"
+            + f" QTextEdit {{ font-family: {FONT_FAMILY_MONO}; font-size: 13px; }}"
         )
         self._custom_css_editor.setPlaceholderText(t("settings.placeholder.css"))
         self._custom_css_editor.setPlainText(appearance_cfg.get("custom_css", ""))
@@ -996,7 +1005,7 @@ class SettingsPanel(QDialog):
         entry.setStyleSheet(entry_style(self._theme_colors))
         row_layout.addWidget(entry, 1)
         layout.addWidget(row)
-        return entry
+        return entry, lbl
 
     def _on_save(self):
         data = config.data
@@ -1173,7 +1182,7 @@ class SettingsPanel(QDialog):
 
         # Custom CSS editor
         self._custom_css_editor.setStyleSheet(
-            text_edit_style(t) + " QTextEdit { font-family: Consolas; font-size: 11px; }"
+            text_edit_style(t) + f" QTextEdit {{ font-family: {FONT_FAMILY_MONO}; font-size: 13px; }}"
         )
 
         # Preview frame
@@ -1248,6 +1257,50 @@ class SettingsPanel(QDialog):
             self._tabs.setTabText(2, t("settings.tab.triggers"))
             self._tabs.setTabText(3, t("settings.tab.appearance"))
             self._tabs.setTabText(4, t("settings.tab.language"))
+        if hasattr(self, '_save_btn'):
+            self._save_btn.setText(t("settings.btn.save"))
+        if hasattr(self, '_provider_combos'):
+            for combo in self._provider_combos:
+                current_id = combo.currentData()
+                self._populate_provider_combo(combo)
+                if current_id:
+                    idx = combo.findData(current_id)
+                    if idx >= 0:
+                        combo.setCurrentIndex(idx)
+        if hasattr(self, '_lbl_provider'):
+            self._lbl_provider.setText(t("settings.label.provider"))
+        if hasattr(self, '_lbl_api_base'):
+            self._lbl_api_base.setText(t("settings.label.api_base"))
+        if hasattr(self, '_lbl_api_key'):
+            self._lbl_api_key.setText(t("settings.label.api_key"))
+        if hasattr(self, '_lbl_model_name'):
+            self._lbl_model_name.setText(t("settings.label.model_name"))
+        if hasattr(self, '_lbl_temperature'):
+            self._lbl_temperature.setText(t("settings.label.temperature"))
+        if hasattr(self, '_lbl_max_tokens'):
+            self._lbl_max_tokens.setText(t("settings.label.max_tokens"))
+        if hasattr(self, '_lbl_style_id'):
+            self._lbl_style_id.setText(t("settings.header.style_id"))
+        if hasattr(self, '_lbl_harper_dialect'):
+            self._lbl_harper_dialect.setText(t("settings.label.harper_dialect"))
+        if hasattr(self, '_harper_dialect'):
+            current_dialect = self._harper_dialect.currentData()
+            self._harper_dialect.blockSignals(True)
+            self._harper_dialect.clear()
+            dialects = [
+                (t("settings.dialect.american"), "American"),
+                (t("settings.dialect.british"), "British"),
+                (t("settings.dialect.australian"), "Australian"),
+                (t("settings.dialect.canadian"), "Canadian"),
+                (t("settings.dialect.indian"), "Indian"),
+            ]
+            for display, data in dialects:
+                self._harper_dialect.addItem(display, data)
+            if current_dialect:
+                idx = self._harper_dialect.findData(current_dialect)
+                if idx >= 0:
+                    self._harper_dialect.setCurrentIndex(idx)
+            self._harper_dialect.blockSignals(False)
 
     def _build_language_tab(self):
         scroll = QScrollArea()

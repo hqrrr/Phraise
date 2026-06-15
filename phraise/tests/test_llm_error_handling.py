@@ -82,6 +82,13 @@ class TestCheckOutputFit(unittest.TestCase):
 
 class TestHandleError(unittest.TestCase):
 
+    def setUp(self):
+        self._lang_patch = patch("phraise.i18n.get_language", return_value="en")
+        self._lang_patch.start()
+
+    def tearDown(self):
+        self._lang_patch.stop()
+
     def test_timeout_error_maps_correctly(self):
         exc = APITimeoutError(request=None)
         msg = _handle_error(exc)

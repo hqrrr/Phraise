@@ -10,9 +10,9 @@ from PySide6.QtWidgets import QApplication, QWidget
 from .config import config
 from .theme import get_theme, theme_notifier
 
-ICON_PATH = Path(__file__).parent / "assets" / "ball_icon.png"
+ICON_PATH = Path(__file__).parent / "assets" / "phraise_logo.png"
 ICON_PATH_PNG = ICON_PATH
-ICON_PATH_SVG = Path(__file__).parent / "assets" / "ball_icon.svg"
+ICON_PATH_SVG = Path(__file__).parent / "assets" / "phraise_logo.svg"
 
 
 class FloatingBall(QWidget):
@@ -83,8 +83,9 @@ class FloatingBall(QWidget):
             p.drawPixmap(x, y, scaled)
         else:
             center = size // 2
-            text_size = max(9, size // 4)
+            text_size = max(10, size // 4)
             font = QFont("Segoe UI", text_size, QFont.Bold)
+            font.setStyleHint(QFont.SansSerif)
             p.setFont(font)
             p.setPen(QColor(self._theme_colors["text"]))
             p.drawText(QRect(0, 0, size, size - 2), Qt.AlignCenter, "AI")

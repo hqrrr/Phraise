@@ -23,7 +23,7 @@ import qtawesome as qta
 
 import shiboken6
 
-from PySide6.QtCore import Qt, QPoint, QRect, QSize, QTimer
+from PySide6.QtCore import Qt, QPoint, QRect, QSize, QTimer, QEvent
 from PySide6.QtGui import QColor, QHideEvent, QMouseEvent, QPainter, QPainterPath, QBrush, QPen, QIcon
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
@@ -262,7 +262,8 @@ class FloatingWindow(QWidget):
 
         self._setup_window()
         self._build_ui()
-        _icon_path = Path(__file__).parent / "assets" / "ball_icon.png"
+        self._install_resize_event_filter()
+        _icon_path = Path(__file__).parent / "assets" / "phraise_logo.png"
         if _icon_path.exists():
             self.setWindowIcon(QIcon(str(_icon_path)))
         add_listener(self._retranslate_ui)
@@ -284,7 +285,7 @@ class FloatingWindow(QWidget):
         y = config.get("floating_window", "position_y", default=600)
         self.setGeometry(x, y, w, h)
         self.setMinimumSize(350, 380)
-        self.setMaximumSize(700, 800)
+        self.setMaximumSize(1400, 1600)
 
         self._radius = 12
         self._bg_color = QColor(self._theme_colors["bg"])
@@ -373,9 +374,9 @@ class FloatingWindow(QWidget):
         bar_layout = QHBoxLayout(self._drag_bar)
         bar_layout.setContentsMargins(12, 0, 4, 0)
 
-        title = QLabel("PhrAIse")
-        title.setStyleSheet(label_style(self._theme_colors, "text", "font-weight: 600; font-size: 13px;"))
-        bar_layout.addWidget(title)
+        self._title_label = QLabel(t("fw.title"))
+        self._title_label.setStyleSheet(label_style(self._theme_colors, "text", "font-weight: 600; font-size: 13px;"))
+        bar_layout.addWidget(self._title_label)
         bar_layout.addStretch()
 
         regen_btn = QPushButton()
@@ -464,9 +465,12 @@ class FloatingWindow(QWidget):
         style_layout.addWidget(self._style_label)
         self._style_buttons: dict[str, QPushButton] = {}
         for s in styles:
-            btn = QPushButton(s.get("label", s["id"]))
-            btn.setFixedSize(80, 26)
             sid = s["id"]
+            label = t(f"style.{sid}")
+            if label == f"style.{sid}":
+                label = s.get("label", sid)
+            btn = QPushButton(label)
+            btn.setFixedSize(80, 26)
             active = sid == self._current_style
             btn.setStyleSheet(style_btn_style(self._theme_colors, active))
             btn.clicked.connect(lambda checked, sid=sid: self._on_style_change(sid))
@@ -632,18 +636,23 @@ class FloatingWindow(QWidget):
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() != Qt.LeftButton:
             return
-        edge = self._get_resize_edge(event.position().toPoint())
+        self._on_resize_press(event.position().toPoint(), event.globalPosition().toPoint())
+
+    def _on_resize_press(self, pos: QPoint, gpos: QPoint):
+        edge = self._get_resize_edge(pos)
         if edge:
             self._resizing = True
             self._resize_edge = edge
-            self._drag_start = event.globalPosition().toPoint()
+            self._drag_start = gpos
             self._drag_start_geo = QRect(self.geometry())
         else:
             self._resizing = False
             self._resize_edge = ""
 
     def mouseMoveEvent(self, event: QMouseEvent):
-        gpos = event.globalPosition().toPoint()
+        self._on_resize_move(event.position().toPoint(), event.globalPosition().toPoint())
+
+    def _on_resize_move(self, pos: QPoint, gpos: QPoint, cursor_widget: QWidget | None = None):
         if self._resizing and self._resize_edge:
             delta = gpos - self._drag_start
             geo = self._drag_start_geo
@@ -661,24 +670,33 @@ class FloatingWindow(QWidget):
             self.setGeometry(x, y, w, h)
             self._drag_start = gpos
             self._drag_start_geo = QRect(self.geometry())
+            edge = self._resize_edge
         else:
-            edge = self._get_resize_edge(event.position().toPoint())
-            if "e" in edge and "s" in edge:
-                self.setCursor(Qt.SizeFDiagCursor)
-            elif "w" in edge and "n" in edge:
-                self.setCursor(Qt.SizeFDiagCursor)
-            elif "e" in edge and "n" in edge:
-                self.setCursor(Qt.SizeBDiagCursor)
-            elif "w" in edge and "s" in edge:
-                self.setCursor(Qt.SizeBDiagCursor)
-            elif "e" in edge or "w" in edge:
-                self.setCursor(Qt.SizeHorCursor)
-            elif "s" in edge or "n" in edge:
-                self.setCursor(Qt.SizeVerCursor)
+            edge = self._get_resize_edge(pos)
+
+        if ("e" in edge and "s" in edge) or ("w" in edge and "n" in edge):
+            self.setCursor(Qt.SizeFDiagCursor)
+        elif "e" in edge and "n" in edge:
+            self.setCursor(Qt.SizeBDiagCursor)
+        elif "w" in edge and "s" in edge:
+            self.setCursor(Qt.SizeBDiagCursor)
+        elif "e" in edge or "w" in edge:
+            self.setCursor(Qt.SizeHorCursor)
+        elif "s" in edge or "n" in edge:
+            self.setCursor(Qt.SizeVerCursor)
+        else:
+            self.unsetCursor()
+
+        if cursor_widget is not None:
+            if edge:
+                cursor_widget.setCursor(self.cursor())
             else:
-                self.unsetCursor()
+                cursor_widget.unsetCursor()
 
     def mouseReleaseEvent(self, event: QMouseEvent):
+        self._on_resize_release()
+
+    def _on_resize_release(self):
         self._resizing = False
         self._resize_edge = ""
         self._save_geometry()
@@ -710,6 +728,46 @@ class FloatingWindow(QWidget):
             edge += "n"
         return edge if edge else ""
 
+    def _install_resize_event_filter(self, widget: QWidget | None = None):
+        if widget is None:
+            widget = self
+        widget.installEventFilter(self)
+        widget.setMouseTracking(True)
+        for child in widget.findChildren(QWidget):
+            child.installEventFilter(self)
+            child.setMouseTracking(True)
+
+    def eventFilter(self, watched, event):
+        if watched is self:
+            return False
+        if not isinstance(watched, QWidget):
+            return False
+        if event.type() not in (QEvent.MouseMove, QEvent.MouseButtonPress, QEvent.MouseButtonRelease):
+            return False
+
+        local_pos = watched.mapTo(self, event.position().toPoint())
+        edge = self._get_resize_edge(local_pos)
+        gpos = event.globalPosition().toPoint()
+
+        if event.type() == QEvent.MouseButtonPress:
+            if event.button() == Qt.LeftButton and edge:
+                self._on_resize_press(local_pos, gpos)
+                return True
+            return False
+
+        if event.type() == QEvent.MouseMove:
+            if self._resizing or edge:
+                self._on_resize_move(local_pos, gpos, cursor_widget=watched)
+                return True
+            return False
+
+        if event.type() == QEvent.MouseButtonRelease:
+            if self._resizing:
+                self._on_resize_release()
+                return True
+            return False
+
+        return False
     # ---- Tab & style ----
 
     def _on_tab_changed(self, idx):
@@ -848,8 +906,8 @@ class FloatingWindow(QWidget):
 
         self._model_combo.blockSignals(True)
         self._model_combo.clear()
-        self._model_combo.addItem("Fast", "model_1")
-        self._model_combo.addItem("Quality", "model_2")
+        self._model_combo.addItem(t("fw.model.fast"), "model_1")
+        self._model_combo.addItem(t("fw.model.quality"), "model_2")
 
         config_key = "optimize_model" if self._current_mode == "optimize" else "translate_model"
         default_val = "model_1" if self._current_mode == "optimize" else "model_2"
@@ -1223,9 +1281,33 @@ class FloatingWindow(QWidget):
 
     def _retranslate_ui(self):
         """Re-apply translations when language changes."""
+        if hasattr(self, '_title_label'):
+            self._title_label.setText(t("fw.title"))
         if hasattr(self, '_tabs'):
             self._tabs.setTabText(0, t("fw.tab.optimize"))
             self._tabs.setTabText(1, t("fw.tab.translate"))
+        if hasattr(self, '_style_label'):
+            self._style_label.setText(t("fw.label.style"))
+        if hasattr(self, '_style_buttons'):
+            styles = config.get("styles", default=[])
+            style_by_id = {s["id"]: s for s in styles}
+            for sid, btn in self._style_buttons.items():
+                label = t(f"style.{sid}")
+                if label == f"style.{sid}":
+                    s = style_by_id.get(sid, {})
+                    label = s.get("label", sid)
+                btn.setText(label)
+        if hasattr(self, '_model_combo') and self._model_combo is not None:
+            self._model_combo.blockSignals(True)
+            current_data = self._model_combo.currentData()
+            self._model_combo.clear()
+            self._model_combo.addItem(t("fw.model.fast"), "model_1")
+            self._model_combo.addItem(t("fw.model.quality"), "model_2")
+            if current_data:
+                idx = self._model_combo.findData(current_data)
+                if idx >= 0:
+                    self._model_combo.setCurrentIndex(idx)
+            self._model_combo.blockSignals(False)
 
     def _apply_theme(self, name: str):
         tc = get_theme(name)["colors"]
@@ -1330,7 +1412,10 @@ class FloatingWindow(QWidget):
         styles = config.get("styles", default=[])
         for s in styles:
             if s["id"] == style_id:
-                return s.get("label", style_id)
+                label = t(f"style.{style_id}")
+                if label == f"style.{style_id}":
+                    label = s.get("label", style_id)
+                return label
         return style_id
 
     # ---- PySide compatibility aliases for main.py ----

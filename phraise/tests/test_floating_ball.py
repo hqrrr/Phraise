@@ -181,7 +181,7 @@ class TestFloatingBallIconFallback(unittest.TestCase):
             cls._app = QApplication([])
 
     def test_icon_file_exists(self) -> None:
-        """The placeholder ball icon (assets/ball_icon.png) must exist on disk."""
+        """The logo icon (assets/phraise_logo.png) must exist on disk."""
         self.assertTrue(ICON_PATH.exists(),
                         f"Icon file missing: {ICON_PATH}")
 

@@ -205,7 +205,7 @@ class PhrAIseApp:
     @staticmethod
     def _create_tray_icon() -> QIcon:
         from pathlib import Path
-        icon_path = Path(__file__).parent / "assets" / "ball_icon.png"
+        icon_path = Path(__file__).parent / "assets" / "phraise_logo.png"
         if icon_path.exists():
             return QIcon(str(icon_path))
         from .theme import get_theme, theme_notifier
@@ -218,7 +218,8 @@ class PhrAIseApp:
         p.setPen(QPen(QColor(colors["accent"]), 3))
         p.setBrush(QBrush(QColor(colors["bg_darker"])))
         p.drawEllipse(4, 4, size - 8, size - 8)
-        font = QFont("Segoe UI", 18, QFont.Bold)
+        font = QFont("Segoe UI", 19, QFont.Bold)
+        font.setStyleHint(QFont.SansSerif)
         p.setFont(font)
         p.setPen(QColor(colors["white"]))
         p.drawText(pixmap.rect(), Qt.AlignCenter, "AI")

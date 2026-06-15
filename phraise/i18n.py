@@ -90,6 +90,18 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
 
     # ── Floating Window ─────────────────────────────────────────────────
+    "fw.title": {
+        "en": "PhrAIse",
+        "zh-CN": "PhrAIse 妙语",
+    },
+    "fw.model.fast": {
+        "en": "Fast",
+        "zh-CN": "快速",
+    },
+    "fw.model.quality": {
+        "en": "Quality",
+        "zh-CN": "高质量",
+    },
     "fw.tab.optimize": {
         "en": "Optimize",
         "zh-CN": "优化",
@@ -150,6 +162,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Generate",
         "zh-CN": "生成",
     },
+    "fw.tooltip.apply_fix": {
+        "en": "Apply fix",
+        "zh-CN": "应用修复",
+    },
     "fw.btn.replace_original": {
         "en": "Replace Original",
         "zh-CN": "替换原文",
@@ -188,7 +204,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
     "fw.toast.truncated": {
         "en": "Response truncated, try switching models or shorten text",
-        "zh-CN": "⚠ 响应被截断，建议切换模型或缩短文本",
+        "zh-CN": "响应被截断，建议切换模型或缩短文本",
     },
 
     # ── Settings Panel ──────────────────────────────────────────────────
@@ -250,27 +266,27 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
     "settings.label.provider": {
         "en": "Provider:",
-        "zh-CN": "Provider:",
+        "zh-CN": "提供商：",
     },
     "settings.label.api_base": {
         "en": "API Base:",
-        "zh-CN": "API Base:",
+        "zh-CN": "API 地址：",
     },
     "settings.label.api_key": {
         "en": "API Key:",
-        "zh-CN": "API Key:",
+        "zh-CN": "API 密钥：",
     },
     "settings.label.model_name": {
         "en": "Model Name:",
-        "zh-CN": "Model Name:",
+        "zh-CN": "模型名称：",
     },
     "settings.label.temperature": {
         "en": "Temperature:",
-        "zh-CN": "Temperature:",
+        "zh-CN": "温度：",
     },
     "settings.label.max_tokens": {
         "en": "Max Tokens:",
-        "zh-CN": "Max Tokens:",
+        "zh-CN": "最大 Token：",
     },
     "settings.label.extra_params": {
         "en": "Extra Params:",
@@ -372,6 +388,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Preset Styles",
         "zh-CN": "预设风格",
     },
+    "settings.header.style_id": {
+        "en": "ID",
+        "zh-CN": "标识",
+    },
     "settings.header.style_label": {
         "en": "Name",
         "zh-CN": "名称",
@@ -406,7 +426,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
     "settings.status.invalid_format": {
         "en": "Invalid format",
-        "zh-CN": "⚠ 格式无效",
+        "zh-CN": "格式无效",
     },
     "settings.section.general": {
         "en": "General Settings",
@@ -508,6 +528,26 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "English Dialect:",
         "zh-CN": "英语方言：",
     },
+    "settings.dialect.american": {
+        "en": "American",
+        "zh-CN": "美式英语",
+    },
+    "settings.dialect.british": {
+        "en": "British",
+        "zh-CN": "英式英语",
+    },
+    "settings.dialect.australian": {
+        "en": "Australian",
+        "zh-CN": "澳式英语",
+    },
+    "settings.dialect.canadian": {
+        "en": "Canadian",
+        "zh-CN": "加拿大英语",
+    },
+    "settings.dialect.indian": {
+        "en": "Indian",
+        "zh-CN": "印度英语",
+    },
     "harper.error.binary_not_found": {
         "en": "Harper not available, using remote model.",
         "zh-CN": "Harper 不可用，使用远程模型。",
@@ -525,8 +565,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "zh-CN": "文本过大，超出本地语法检查限制(>120KB)。使用远程模型。",
     },
     "settings.label.language_desc": {
-        "en": "Changes take effect immediately across all windows.",
-        "zh-CN": "更改会立即在所有窗口中生效。",
+        "en": "Select the UI language.",
+        "zh-CN": "选择界面语言。",
     },
 
     # ── LLM Client ──────────────────────────────────────────────────────
@@ -614,6 +654,30 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
 
     # ── Provider Labels ─────────────────────────────────────────────────
+    "provider.openai": {
+        "en": "OpenAI",
+        "zh-CN": "OpenAI",
+    },
+    "provider.claude": {
+        "en": "Claude (Anthropic)",
+        "zh-CN": "Claude (Anthropic)",
+    },
+    "provider.gemini": {
+        "en": "Gemini (Google)",
+        "zh-CN": "Gemini (Google)",
+    },
+    "provider.deepseek": {
+        "en": "DeepSeek",
+        "zh-CN": "DeepSeek",
+    },
+    "provider.openrouter": {
+        "en": "OpenRouter",
+        "zh-CN": "OpenRouter",
+    },
+    "provider.siliconflow": {
+        "en": "SiliconFlow",
+        "zh-CN": "SiliconFlow",
+    },
     "provider.kimi": {
         "en": "Kimi (Moonshot)",
         "zh-CN": "Kimi (月之暗面)",

@@ -104,12 +104,23 @@ class ThemeSizing(TypedDict):
 FullTheme = dict[str, ThemeColors | ThemeSizing]
 
 
+# Cross-platform UI font stack; Segoe UI + Microsoft YaHei UI keeps Latin and
+# Simplified Chinese glyphs harmonious at small sizes.
+FONT_FAMILY_UI = (
+    '"Segoe UI", "Microsoft YaHei UI", "PingFang SC", '
+    '"Hiragino Sans GB", "Source Han Sans SC", sans-serif'
+)
+FONT_FAMILY_MONO = (
+    '"Consolas", "Microsoft YaHei Mono", "Source Han Sans SC", '
+    '"Courier New", monospace'
+)
+
 # ── Default sizing values (extracted from style generators) ─────────────────
 DEFAULT_SIZING: ThemeSizing = {
-    "font_size_sm": 11,
-    "font_size_base": 12,
-    "font_size_md": 13,
-    "font_size_lg": 14,
+    "font_size_sm": 12,
+    "font_size_base": 13,
+    "font_size_md": 14,
+    "font_size_lg": 15,
     "font_weight_normal": 400,
     "font_weight_medium": 500,
     "font_weight_semibold": 600,
@@ -476,6 +487,8 @@ def generate_app_stylesheet(theme: dict,
         QWidget {{
             background-color: {theme["bg"]};
             color: {theme["text"]};
+            font-family: {FONT_FAMILY_UI};
+            font-size: {_px(s['font_size_base'])};
         }}
         QMenu {{
             background-color: {theme["surface"]};
