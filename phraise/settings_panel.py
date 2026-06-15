@@ -1,16 +1,19 @@
 from .config import config
 from .i18n import t, SUPPORTED_LANGUAGES, set_language, get_language, add_listener, remove_listener
+from .provider_manager import get_providers, init_providers
 
 import threading
 
 import shiboken6
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSortFilterProxyModel
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QScrollArea,
     QWidget, QLabel, QLineEdit, QCheckBox, QComboBox, QPushButton,
     QFrame, QApplication, QListWidget, QMessageBox, QTextEdit, QSlider,
+    QCompleter,
 )
+from PySide6.QtGui import QStandardItemModel
 
 import json
 
@@ -41,19 +44,6 @@ class NoScrollComboBox(QComboBox):
             event.ignore()
 
 
-PROVIDER_PRESETS = {
-    "openai": {"label": "OpenAI", "api_base": "https://api.openai.com/v1"},
-    "claude": {"label": "Claude (Anthropic)", "api_base": "https://api.anthropic.com/v1"},
-    "gemini": {"label": "Gemini (Google)", "api_base": "https://generativelanguage.googleapis.com/v1beta/openai/"},
-    "deepseek": {"label": "DeepSeek", "api_base": "https://api.deepseek.com/v1"},
-    "openrouter": {"label": "OpenRouter", "api_base": "https://openrouter.ai/api/v1"},
-    "kimi": {"label": "Kimi (Moonshot)", "api_base": "https://api.moonshot.cn/v1"},
-    "glm": {"label": "GLM (Zhipu)", "api_base": "https://open.bigmodel.cn/api/paas/v4"},
-    "qwen": {"label": "Qwen (Tongyi)", "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1"},
-    "siliconflow": {"label": "SiliconFlow", "api_base": "https://api.siliconflow.cn/v1"},
-}
-
-
 class SettingsPanel(QDialog):
     """Settings panel for configuring models, styles, triggers, and appearance."""
 
@@ -70,6 +60,7 @@ class SettingsPanel(QDialog):
 
         self._registered_listener = False
         self._is_closing = False
+        self._provider_combos: list[QComboBox] = []
 
         self._build_ui()
 
@@ -79,6 +70,104 @@ class SettingsPanel(QDialog):
             setattr(self, '_is_closing', True),
             remove_listener(self._retranslate_ui),
         ))
+
+        init_providers(callback=self._on_providers_loaded)
+
+    def _on_providers_loaded(self):
+        if self._is_closing:
+            return
+        if not shiboken6.isValid(self):
+            try:
+                _ = self._provider_combos
+            except RuntimeError:
+                return
+        for combo in self._provider_combos:
+            current_id = combo.currentData()
+            self._populate_provider_combo(combo)
+            if current_id:
+                idx = combo.findData(current_id)
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
+            else:
+                idx = combo.findData("custom")
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
+            # Re-apply auto-fill/hide logic for the newly selected item.
+            combo.blockSignals(True)
+            try:
+                self._apply_provider_selection(combo)
+            finally:
+                combo.blockSignals(False)
+
+    @staticmethod
+    def _find_provider_by_id(provider_id: str) -> dict | None:
+        for p in get_providers():
+            if p.get("id") == provider_id:
+                return p
+        return None
+
+    @staticmethod
+    def _populate_provider_combo(combo: QComboBox) -> None:
+        combo.blockSignals(True)
+        try:
+            combo.clear()
+            for provider in get_providers():
+                label = provider.get("label", provider.get("id", ""))
+                combo.addItem(label, provider.get("id", ""))
+            combo.addItem(t("settings.provider_custom"), "custom")
+        finally:
+            combo.blockSignals(False)
+
+    @staticmethod
+    def _provider_for_api_base(api_base: str) -> dict | None:
+        for p in get_providers():
+            if p.get("api_base") == api_base:
+                return p
+        return None
+
+    def _build_searchable_combo(self) -> NoScrollComboBox:
+        combo = NoScrollComboBox()
+        combo.setEditable(True)
+        combo.setInsertPolicy(NoScrollComboBox.NoInsert)
+        combo.lineEdit().setPlaceholderText(t("settings.provider_search"))
+
+        proxy = QSortFilterProxyModel(combo)
+        proxy.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        proxy.setSourceModel(combo.model())
+
+        completer = QCompleter(proxy, combo)
+        completer.setFilterMode(Qt.MatchContains)
+        completer.setCaseSensitivity(Qt.CaseInsensitive)
+        completer.setCompletionMode(QCompleter.PopupCompletion)
+        completer.setModel(proxy)
+        combo.setCompleter(completer)
+
+        def _on_text_changed(text: str) -> None:
+            proxy.setFilterFixedString(text)
+
+        combo.lineEdit().textEdited.connect(_on_text_changed)
+
+        def _on_completion_activated(text: str) -> None:
+            idx = combo.findText(text)
+            if idx >= 0:
+                combo.setCurrentIndex(idx)
+
+        completer.activated.connect(_on_completion_activated)
+        return combo
+
+    def _apply_provider_selection(self, combo: QComboBox) -> None:
+        api_base_entry = getattr(combo, "_api_base_entry", None)
+        api_base_row = getattr(combo, "_api_base_row", None)
+        if api_base_entry is None or api_base_row is None:
+            return
+        current_data = combo.currentData()
+        if current_data and current_data != "custom":
+            provider = self._find_provider_by_id(current_data)
+            if provider:
+                api_base_entry.setText(provider.get("api_base", ""))
+            api_base_row.setVisible(False)
+        else:
+            api_base_row.setVisible(True)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -199,10 +288,8 @@ class SettingsPanel(QDialog):
         lbl.setStyleSheet("color: #a6adc8;")
         rl.addWidget(lbl)
 
-        combo = NoScrollComboBox()
-        for key, preset in PROVIDER_PRESETS.items():
-            combo.addItem(preset["label"], key)
-        combo.addItem(t("settings.provider_custom"), "custom")
+        combo = self._build_searchable_combo()
+        self._populate_provider_combo(combo)
         combo.setStyleSheet(self._combo_style())
         rl.addWidget(combo, 1)
         layout.addWidget(row)
@@ -222,14 +309,17 @@ class SettingsPanel(QDialog):
         saved_provider = cfg.get("provider", "")
         saved_api_base = cfg.get("api_base", "")
 
+        combo._api_base_entry = api_base_entry
+        combo._api_base_row = api_base_row
+        self._provider_combos.append(combo)
+
         detected = None
-        if saved_provider in PROVIDER_PRESETS:
+        if self._find_provider_by_id(saved_provider):
             detected = saved_provider
         else:
-            for key, preset in PROVIDER_PRESETS.items():
-                if saved_api_base == preset["api_base"]:
-                    detected = key
-                    break
+            detected_provider = self._provider_for_api_base(saved_api_base)
+            if detected_provider:
+                detected = detected_provider.get("id")
 
         if detected:
             idx = combo.findData(detected)
@@ -240,18 +330,10 @@ class SettingsPanel(QDialog):
             if idx >= 0:
                 combo.setCurrentIndex(idx)
 
-        def _on_provider_changed():
-            current_data = combo.currentData()
-            if current_data and current_data != "custom":
-                preset = PROVIDER_PRESETS.get(current_data)
-                if preset:
-                    api_base_entry.setText(preset["api_base"])
-                api_base_row.setVisible(False)
-            else:
-                api_base_row.setVisible(True)
-
-        combo.currentIndexChanged.connect(_on_provider_changed)
-        _on_provider_changed()
+        combo.currentIndexChanged.connect(
+            lambda _idx: self._apply_provider_selection(combo)
+        )
+        self._apply_provider_selection(combo)
 
         return combo, api_base_entry
 

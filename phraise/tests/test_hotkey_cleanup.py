@@ -71,11 +71,13 @@ class TestHotkeyCleanup(unittest.TestCase):
         import atexit as _atexit
         _atexit.unregister(mgr.stop)
 
-        # Re-register under the mock so we can detect the call
-        _atexit.register(mgr.stop)
-
-        # Manually run exitfuncs (simulates what Python does on sys.exit)
-        _atexit._run_exitfuncs()
+        # Re-register under the mock so we can detect the call.
+        # atexit.register returns the registered function; invoke it directly
+        # instead of _run_exitfuncs() to avoid executing global exit handlers
+        # from other imported modules (e.g. PySide6 COM teardown) which would
+        # corrupt state for later tests and produce RPC_E_WRONG_THREAD crashes.
+        registered_func = _atexit.register(mgr.stop)
+        registered_func()
         mock_stop.assert_called_once()
 
     # ------------------------------------------------------------------

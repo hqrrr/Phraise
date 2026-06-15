@@ -352,6 +352,22 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Fetched {count} model(s)",
         "zh-CN": "已获取 {count} 个模型",
     },
+    "settings.provider_search": {
+        "en": "Type to search providers...",
+        "zh-CN": "输入搜索提供商...",
+    },
+    "settings.status.providers_loading": {
+        "en": "Loading provider list...",
+        "zh-CN": "正在加载提供商列表...",
+    },
+    "settings.status.providers_loaded": {
+        "en": "Loaded {count} providers",
+        "zh-CN": "已加载 {count} 个提供商",
+    },
+    "settings.status.providers_fetch_failed": {
+        "en": "Using local provider list",
+        "zh-CN": "使用本地提供商列表",
+    },
     "settings.section.preset_styles": {
         "en": "Preset Styles",
         "zh-CN": "预设风格",
@@ -609,6 +625,42 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "provider.qwen": {
         "en": "Qwen (Tongyi)",
         "zh-CN": "Qwen (通义千问)",
+    },
+    "provider.groq": {
+        "en": "Groq",
+        "zh-CN": "Groq",
+    },
+    "provider.together": {
+        "en": "Together AI",
+        "zh-CN": "Together AI",
+    },
+    "provider.fireworks": {
+        "en": "Fireworks AI",
+        "zh-CN": "Fireworks AI",
+    },
+    "provider.perplexity": {
+        "en": "Perplexity",
+        "zh-CN": "Perplexity",
+    },
+    "provider.xai": {
+        "en": "xAI (Grok)",
+        "zh-CN": "xAI (Grok)",
+    },
+    "provider.mistral": {
+        "en": "Mistral AI",
+        "zh-CN": "Mistral AI",
+    },
+    "provider.cohere": {
+        "en": "Cohere",
+        "zh-CN": "Cohere",
+    },
+    "provider.voyageai": {
+        "en": "Voyage AI",
+        "zh-CN": "Voyage AI",
+    },
+    "provider.hyperbolic": {
+        "en": "Hyperbolic",
+        "zh-CN": "Hyperbolic",
     },
 }
 

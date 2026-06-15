@@ -94,6 +94,15 @@ class TestCallbackAfterDestroy(unittest.TestCase):
             except AttributeError:
                 pass
 
+    @classmethod
+    def tearDownClass(cls):
+        """Remove class-level descriptors so they don't leak to other test classes."""
+        for attr in ("_rewrite_texts", "_translation_text"):
+            try:
+                delattr(FloatingWindow, attr)
+            except AttributeError:
+                pass
+
     # ---- _on_optimize_done ----
 
     def test_optimize_done_deleted_self_returns_safely(self):
