@@ -240,7 +240,10 @@ class TestMainThreadComIntegration(unittest.TestCase):
 
         import pythoncom
         # Simulate what main() does: init MTA before app starts
-        pythoncom.CoInitializeEx(pythoncom.COINIT_MULTITHREADED)
+        try:
+            pythoncom.CoInitializeEx(pythoncom.COINIT_MULTITHREADED)
+        except Exception:
+            pass  # Already initialized — continue
 
         # Now simulate calling _ensure_com_initialized afterwards —
         # it should be a no-op since COM is already initialized.
@@ -252,7 +255,10 @@ class TestMainThreadComIntegration(unittest.TestCase):
             self.skipTest("Windows-only COM test")
 
         import pythoncom
-        pythoncom.CoInitializeEx(pythoncom.COINIT_MULTITHREADED)
+        try:
+            pythoncom.CoInitializeEx(pythoncom.COINIT_MULTITHREADED)
+        except Exception:
+            pass  # Already initialized — continue
 
         # Patch uiautomation so we don't need a real UIA target
         with patch.dict("sys.modules", {"uiautomation": Mock()}):

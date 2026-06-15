@@ -73,21 +73,20 @@ class TestMainShutdownAllOnce(unittest.TestCase):
             with patch("phraise.main.config") as mock_config:
                 mock_config.get.return_value = ""
 
-                with patch("phraise.main._dark_palette"):
-                    # Lazy imports in main() require patching the source module
-                    with patch("phraise.dispatch.init"):
-                        with patch("phraise.theme.DEFAULT_THEME", "dark"):
-                            with patch("phraise.theme.generate_app_stylesheet",
-                                       return_value=""):
-                                with patch("phraise.main.PhrAIseApp"):
-                                    with patch(
-                                        "phraise.harper_client.HarperClient"
-                                    ) as mock_hc:
-                                        from phraise.main import main
-                                        main()
-                                        # The lambda wraps shutdown_all — invoke it
-                                        (cb,) = mock_app.aboutToQuit.connect.\
-                                            call_args[0]
-                                        cb()
-                                        mock_hc.shutdown_all.\
-                                            assert_called_once()
+                # Theme is handled by palette_for_theme + apply_theme — no _dark_palette
+                with patch("phraise.dispatch.init"):
+                    with patch("phraise.theme.DEFAULT_THEME", "dark"):
+                        with patch("phraise.theme.generate_app_stylesheet",
+                                   return_value=""):
+                            with patch("phraise.main.PhrAIseApp"):
+                                with patch(
+                                    "phraise.harper_client.HarperClient"
+                                ) as mock_hc:
+                                    from phraise.main import main
+                                    main()
+                                    # The lambda wraps shutdown_all — invoke it
+                                    (cb,) = mock_app.aboutToQuit.connect.\
+                                        call_args[0]
+                                    cb()
+                                    mock_hc.shutdown_all.\
+                                        assert_called_once()

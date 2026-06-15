@@ -3,7 +3,6 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from phraise.settings_panel import SettingsPanel
@@ -22,11 +21,23 @@ class _DeletedAttr:
         pass
 
 
+_MOCK_THEME_COLORS = {
+    "surface": "#2e2e3e",
+    "text": "#cdd6f4",
+    "border": "#45475a",
+    "accent": "#6c5ce7",
+    "bg_darker": "#181825",
+    "text_muted": "#a6adc8",
+    "surface_hover": "#45475a",
+}
+
+
 def _make_sp(**overrides) -> SettingsPanel:
     with patch.object(SettingsPanel, "__init__", return_value=None):
         sp = SettingsPanel.__new__(SettingsPanel)
     sp._is_closing = False
     sp._provider_combos = []
+    sp._theme_colors = _MOCK_THEME_COLORS
     for attr, val in overrides.items():
         setattr(sp, attr, val)
     return sp

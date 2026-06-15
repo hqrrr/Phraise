@@ -37,6 +37,9 @@ def _make_sp(**overrides) -> SettingsPanel:
 
     sp._is_closing = False
 
+    # _theme_colors is needed by _on_test_done / _on_fetch_done (set in real __init__)
+    sp._theme_colors = {}
+
     # Build minimal mock entries dict
     status_mock = MagicMock()
     status_mock.setText = MagicMock()
