@@ -1,19 +1,23 @@
 from .config import config
 from .i18n import t, SUPPORTED_LANGUAGES, set_language, get_language, add_listener, remove_listener
 from .provider_manager import get_providers, init_providers
+from .theme import (
+    combo_style, entry_style, btn_style, tab_style, action_btn_style,
+    label_style, text_edit_style, get_theme, theme_notifier,
+    resolve_theme_name, rgba, list_themes,
+)
 
 import threading
 
 import shiboken6
 
-from PySide6.QtCore import Qt, QSortFilterProxyModel
+from PySide6.QtCore import Qt, Signal, QSortFilterProxyModel
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QScrollArea,
     QWidget, QLabel, QLineEdit, QCheckBox, QComboBox, QPushButton,
-    QFrame, QApplication, QListWidget, QMessageBox, QTextEdit, QSlider,
+    QFrame, QApplication, QMessageBox, QTextEdit, QSlider,
     QCompleter,
 )
-from PySide6.QtGui import QStandardItemModel
 
 import json
 
@@ -31,6 +35,14 @@ class NoScrollComboBox(QComboBox):
 
     def showPopup(self):
         self._popup_open = True
+        view = self.view()
+        if view is not None:
+            view.setMaximumWidth(self.width())
+            view.setTextElideMode(Qt.ElideRight)
+        completer_popup = self.completer().popup() if self.completer() else None
+        if completer_popup is not None:
+            completer_popup.setMaximumWidth(self.width())
+            completer_popup.setTextElideMode(Qt.ElideRight)
         super().showPopup()
 
     def hidePopup(self):
@@ -47,12 +59,16 @@ class NoScrollComboBox(QComboBox):
 class SettingsPanel(QDialog):
     """Settings panel for configuring models, styles, triggers, and appearance."""
 
+    theme_applied = Signal(str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._theme_colors = get_theme(theme_notifier.current_theme)["colors"]
         self.setWindowTitle(t("settings.title"))
         self.resize(550, 500)
         self.setMinimumSize(500, 400)
-        self.setStyleSheet("QDialog { background: #1e1e2e; }")
+        self.setStyleSheet(f"QDialog {{ background: {self._theme_colors['bg']}; }}")
+        theme_notifier.theme_changed.connect(self._on_theme_changed)
         flags = self.windowFlags()
         flags &= ~Qt.WindowContextHelpButtonHint
         flags |= Qt.WindowCloseButtonHint
@@ -174,13 +190,7 @@ class SettingsPanel(QDialog):
         layout.setContentsMargins(10, 10, 10, 10)
 
         self._tabs = QTabWidget()
-        self._tabs.setStyleSheet("""
-            QTabWidget::pane { border: none; background: #1e1e2e; }
-            QTabBar::tab { background: #313244; color: #a6adc8; padding: 8px 20px;
-                           border: none; font-size: 13px; font-weight: 500; }
-            QTabBar::tab:selected { background: #6c5ce7; color: #fff; }
-            QTabBar::tab:hover:!selected { background: #45475a; }
-        """)
+        self._tabs.setStyleSheet(tab_style(self._theme_colors))
         self._tabs.addTab(self._build_model_tab(), t("settings.tab.models"))
         self._tabs.addTab(self._build_style_tab(), t("settings.tab.styles"))
         self._tabs.addTab(self._build_trigger_tab(), t("settings.tab.triggers"))
@@ -188,20 +198,16 @@ class SettingsPanel(QDialog):
         self._tabs.addTab(self._build_language_tab(), t("settings.tab.language"))
         layout.addWidget(self._tabs)
 
-        save_btn = QPushButton(t("settings.btn.save"))
-        save_btn.setFixedHeight(36)
-        save_btn.setStyleSheet("""
-            QPushButton { background: #6c5ce7; color: white; border: none;
-                          border-radius: 8px; font-size: 13px; font-weight: 600;
-                          padding: 6px 24px; }
-            QPushButton:hover { background: #7c6cf7; }
-        """)
-        save_btn.clicked.connect(self._on_save)
-        layout.addWidget(save_btn, alignment=Qt.AlignCenter)
+        self._save_btn = QPushButton(t("settings.btn.save"))
+        self._save_btn.setFixedHeight(36)
+        self._save_btn.setStyleSheet(action_btn_style(self._theme_colors, "accent"))
+        self._save_btn.clicked.connect(self._on_save)
+        layout.addWidget(self._save_btn, alignment=Qt.AlignCenter)
 
     def _build_model_tab(self):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         w = QWidget()
         layout = QVBoxLayout(w)
@@ -217,7 +223,7 @@ class SettingsPanel(QDialog):
         # ── Harper dialect config ──
         layout.addSpacing(12)
         harper_section_label = QLabel(t("settings.section.harper"))
-        harper_section_label.setStyleSheet("color: #cdd6f4; font-size: 14px; font-weight: 600;")
+        harper_section_label.setStyleSheet(label_style(self._theme_colors, "text", "font-size: 14px; font-weight: 600;"))
         layout.addWidget(harper_section_label)
 
         dialect_row = QWidget()
@@ -225,7 +231,7 @@ class SettingsPanel(QDialog):
         drl.setContentsMargins(0, 0, 0, 0)
         dialect_lbl = QLabel(t("settings.label.harper_dialect"))
         dialect_lbl.setFixedWidth(120)
-        dialect_lbl.setStyleSheet("color: #a6adc8;")
+        dialect_lbl.setStyleSheet(label_style(self._theme_colors, "text_muted"))
         drl.addWidget(dialect_lbl)
 
         self._harper_dialect = NoScrollComboBox()
@@ -236,7 +242,7 @@ class SettingsPanel(QDialog):
         idx = self._harper_dialect.findData(current_dialect)
         if idx >= 0:
             self._harper_dialect.setCurrentIndex(idx)
-        self._harper_dialect.setStyleSheet(self._combo_style())
+        self._harper_dialect.setStyleSheet(combo_style(self._theme_colors))
         drl.addWidget(self._harper_dialect)
         drl.addStretch()
         layout.addWidget(dialect_row)
@@ -258,7 +264,7 @@ class SettingsPanel(QDialog):
         rl.setContentsMargins(0, 0, 0, 0)
         lbl = QLabel(label_text)
         lbl.setFixedWidth(120)
-        lbl.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        lbl.setStyleSheet(label_style(self._theme_colors, "text_muted", "font-size: 12px;"))
         rl.addWidget(lbl)
         combo = NoScrollComboBox()
         combo.addItem(t("settings.model.not_selected"), "")
@@ -272,7 +278,7 @@ class SettingsPanel(QDialog):
             combo.setCurrentIndex(idx)
         else:
             combo.setCurrentIndex(0)
-        combo.setStyleSheet(self._combo_style())
+        combo.setStyleSheet(combo_style(self._theme_colors))
         combo.setFixedWidth(220)
         rl.addWidget(combo)
         rl.addStretch()
@@ -285,12 +291,12 @@ class SettingsPanel(QDialog):
         rl.setContentsMargins(0, 0, 0, 0)
         lbl = QLabel("Provider:")
         lbl.setFixedWidth(120)
-        lbl.setStyleSheet("color: #a6adc8;")
+        lbl.setStyleSheet(label_style(self._theme_colors, "text_muted"))
         rl.addWidget(lbl)
 
         combo = self._build_searchable_combo()
         self._populate_provider_combo(combo)
-        combo.setStyleSheet(self._combo_style())
+        combo.setStyleSheet(combo_style(self._theme_colors))
         rl.addWidget(combo, 1)
         layout.addWidget(row)
 
@@ -299,10 +305,10 @@ class SettingsPanel(QDialog):
         abl.setContentsMargins(0, 0, 0, 0)
         api_lbl = QLabel("API Base:")
         api_lbl.setFixedWidth(120)
-        api_lbl.setStyleSheet("color: #a6adc8;")
+        api_lbl.setStyleSheet(label_style(self._theme_colors, "text_muted"))
         abl.addWidget(api_lbl)
         api_base_entry = QLineEdit(cfg.get("api_base", ""))
-        api_base_entry.setStyleSheet(self._entry_style())
+        api_base_entry.setStyleSheet(entry_style(self._theme_colors))
         abl.addWidget(api_base_entry, 1)
         layout.addWidget(api_base_row)
 
@@ -353,7 +359,7 @@ class SettingsPanel(QDialog):
         ml.setContentsMargins(0, 0, 0, 0)
         model_lbl = QLabel("Model Name:")
         model_lbl.setFixedWidth(120)
-        model_lbl.setStyleSheet("color: #a6adc8;")
+        model_lbl.setStyleSheet(label_style(self._theme_colors, "text_muted"))
         ml.addWidget(model_lbl)
         model_combo = NoScrollComboBox()
         model_combo.setEditable(True)
@@ -362,13 +368,13 @@ class SettingsPanel(QDialog):
         if model_name:
             model_combo.addItem(model_name)
             model_combo.setCurrentText(model_name)
-        model_combo.setStyleSheet(self._combo_style())
+        model_combo.setStyleSheet(combo_style(self._theme_colors))
         ml.addWidget(model_combo, 1)
 
         fetch_btn = QPushButton(t("settings.btn.fetch_models"))
         fetch_btn.setFixedHeight(28)
         fetch_btn.setFixedWidth(110)
-        fetch_btn.setStyleSheet(self._small_btn_style())
+        fetch_btn.setStyleSheet(btn_style(self._theme_colors))
         fetch_btn.clicked.connect(lambda checked, k=model_key: self._fetch_models(k))
         ml.addWidget(fetch_btn)
 
@@ -381,31 +387,25 @@ class SettingsPanel(QDialog):
         tl.setContentsMargins(0, 0, 0, 0)
         temp_lbl = QLabel("Temperature:")
         temp_lbl.setFixedWidth(120)
-        temp_lbl.setStyleSheet("color: #a6adc8;")
+        temp_lbl.setStyleSheet(label_style(self._theme_colors, "text_muted"))
         tl.addWidget(temp_lbl)
         min_lbl = QLabel("\U0001f52c")
-        min_lbl.setStyleSheet("color: #a6adc8; font-size: 14px;")
+        min_lbl.setStyleSheet(label_style(self._theme_colors, "text_muted", "font-size: 14px;"))
         min_lbl.setToolTip(t("settings.tooltip.precise"))
         tl.addWidget(min_lbl)
         slider = QSlider(Qt.Horizontal)
         slider.setRange(0, 100)
         slider.setValue(int(temp_val * 100))
-        slider.setStyleSheet("""
-            QSlider::groove:horizontal { height: 6px; background: #313244; border-radius: 3px; }
-            QSlider::handle:horizontal { background: #6c5ce7; width: 14px; height: 14px;
-                                         margin: -4px 0; border-radius: 7px; }
-            QSlider::handle:horizontal:hover { background: #7c6cf7; }
-            QSlider::sub-page:horizontal { background: #6c5ce7; border-radius: 3px; }
-        """)
+        slider.setStyleSheet(self._slider_style())
         tl.addWidget(slider, 1)
         max_lbl = QLabel("\u2728")
-        max_lbl.setStyleSheet("color: #a6adc8; font-size: 14px;")
+        max_lbl.setStyleSheet(label_style(self._theme_colors, "text_muted", "font-size: 14px;"))
         max_lbl.setToolTip(t("settings.tooltip.creative"))
         tl.addWidget(max_lbl)
         val_lbl = QLabel(f"{temp_val:.2f}")
         val_lbl.setFixedWidth(36)
         val_lbl.setAlignment(Qt.AlignRight)
-        val_lbl.setStyleSheet("color: #cdd6f4; font-size: 12px;")
+        val_lbl.setStyleSheet(label_style(self._theme_colors, "text", "font-size: 12px;"))
         tl.addWidget(val_lbl)
         slider.valueChanged.connect(lambda v: val_lbl.setText(f"{v / 100:.2f}"))
         layout.addWidget(temp_row)
@@ -421,12 +421,12 @@ class SettingsPanel(QDialog):
 
         test_btn = QPushButton(t("settings.btn.test_connection"))
         test_btn.setFixedHeight(28)
-        test_btn.setStyleSheet(self._small_btn_style())
+        test_btn.setStyleSheet(btn_style(self._theme_colors))
         test_btn.clicked.connect(lambda checked, k=model_key: self._test_model(k))
         bl.addWidget(test_btn)
 
         status = QLabel("")
-        status.setStyleSheet("color: #a6adc8; font-size: 11px; padding: 2px 8px;")
+        status.setStyleSheet(label_style(self._theme_colors, "text_muted", "font-size: 11px; padding: 2px 8px;"))
         status.setWordWrap(True)
         bl.addWidget(status, 1)
         layout.addWidget(btn_row)
@@ -451,19 +451,19 @@ class SettingsPanel(QDialog):
             else:
                 combo.setCurrentIndex(0)
 
-    @staticmethod
-    def _dlg_field(layout, label_text, default_value="", password=False):
+    def _dlg_field(self, layout, label_text, default_value="", password=False):
+        t = self._theme_colors
         row = QWidget()
         rl = QHBoxLayout(row)
         rl.setContentsMargins(0, 0, 0, 0)
         lbl = QLabel(label_text)
         lbl.setFixedWidth(90)
-        lbl.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        lbl.setStyleSheet(label_style(t, "text_muted", "font-size: 12px;"))
         rl.addWidget(lbl)
         entry = QLineEdit(default_value)
         if password:
             entry.setEchoMode(QLineEdit.Password)
-        entry.setStyleSheet("QLineEdit { background: #181825; color: #cdd6f4; border: 1px solid #45475a; border-radius: 6px; padding: 6px 10px; font-size: 12px; } QLineEdit:focus { border-color: #6c5ce7; }")
+        entry.setStyleSheet(entry_style(t))
         rl.addWidget(entry, 1)
         layout.addWidget(row)
         return entry
@@ -477,7 +477,7 @@ class SettingsPanel(QDialog):
         model_name = entries["model_combo"].currentText()
 
         entries["status"].setText(t("settings.status.testing"))
-        entries["status"].setStyleSheet("color: #f9e2af; font-size: 11px; padding: 2px 8px;")
+        entries["status"].setStyleSheet(label_style(self._theme_colors, "yellow", "font-size: 11px; padding: 2px 8px;"))
         QApplication.processEvents()
 
         def do_test():
@@ -499,10 +499,10 @@ class SettingsPanel(QDialog):
         entries = self._model_entries[model_key]
         if ok:
             entries["status"].setText(msg)
-            entries["status"].setStyleSheet("color: #a6e3a1; font-size: 11px; padding: 2px 8px;")
+            entries["status"].setStyleSheet(label_style(self._theme_colors, "green", "font-size: 11px; padding: 2px 8px;"))
         else:
             entries["status"].setText(msg)
-            entries["status"].setStyleSheet("color: #f38ba8; font-size: 11px; padding: 2px 8px;")
+            entries["status"].setStyleSheet(label_style(self._theme_colors, "red", "font-size: 11px; padding: 2px 8px;"))
 
     def _fetch_models(self, model_key):
         entries = self._model_entries[model_key]
@@ -510,7 +510,7 @@ class SettingsPanel(QDialog):
         api_key = entries["api_key"].text()
 
         entries["status"].setText(t("settings.status.fetching"))
-        entries["status"].setStyleSheet("color: #f9e2af; font-size: 11px; padding: 2px 8px;")
+        entries["status"].setStyleSheet(label_style(self._theme_colors, "yellow", "font-size: 11px; padding: 2px 8px;"))
         QApplication.processEvents()
 
         def do_fetch():
@@ -532,23 +532,24 @@ class SettingsPanel(QDialog):
         entries = self._model_entries[model_key]
         if err:
             entries["status"].setText(err)
-            entries["status"].setStyleSheet("color: #f38ba8; font-size: 11px; padding: 2px 8px;")
+            entries["status"].setStyleSheet(label_style(self._theme_colors, "red", "font-size: 11px; padding: 2px 8px;"))
             return
 
         if not names:
             entries["status"].setText(t("settings.status.no_models"))
-            entries["status"].setStyleSheet("color: #a6adc8; font-size: 11px; padding: 2px 8px;")
+            entries["status"].setStyleSheet(label_style(self._theme_colors, "text_muted", "font-size: 11px; padding: 2px 8px;"))
             return
 
         entries["model_combo"].clear()
         entries["model_combo"].addItems(names)
         entries["model_combo"].setCurrentIndex(0)
         entries["status"].setText(t("settings.status.models_fetched", count=len(names)))
-        entries["status"].setStyleSheet("color: #a6e3a1; font-size: 11px; padding: 2px 8px;")
+        entries["status"].setStyleSheet(label_style(self._theme_colors, "green", "font-size: 11px; padding: 2px 8px;"))
 
     def _build_style_tab(self):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         w = QWidget()
         layout = QVBoxLayout(w)
@@ -561,15 +562,15 @@ class SettingsPanel(QDialog):
         header_layout.setContentsMargins(6, 2, 6, 2)
         hl_id = QLabel("ID")
         hl_id.setFixedWidth(80)
-        hl_id.setStyleSheet("color: #a6adc8; font-weight: bold; font-size: 11px;")
+        hl_id.setStyleSheet(label_style(self._theme_colors, "text_muted", "font-weight: bold; font-size: 11px;"))
         header_layout.addWidget(hl_id)
         hl_label = QLabel(t("settings.header.style_label"))
         hl_label.setFixedWidth(80)
-        hl_label.setStyleSheet("color: #a6adc8; font-weight: bold; font-size: 11px;")
+        hl_label.setStyleSheet(label_style(self._theme_colors, "text_muted", "font-weight: bold; font-size: 11px;"))
         header_layout.addWidget(hl_label)
         hl_kw = QLabel(t("settings.header.style_keyword"))
         hl_kw.setFixedWidth(150)
-        hl_kw.setStyleSheet("color: #a6adc8; font-weight: bold; font-size: 11px;")
+        hl_kw.setStyleSheet(label_style(self._theme_colors, "text_muted", "font-weight: bold; font-size: 11px;"))
         header_layout.addWidget(hl_kw)
         header_layout.addStretch()
         layout.addWidget(header)
@@ -580,31 +581,26 @@ class SettingsPanel(QDialog):
             row = QWidget()
             row_layout = QHBoxLayout(row)
             row_layout.setContentsMargins(6, 2, 6, 2)
-            row.setStyleSheet("background: #313244; border-radius: 4px;")
+            row.setStyleSheet(f"background: {self._theme_colors['surface']}; border-radius: 4px;")
 
             id_entry = QLineEdit(s.get("id", ""))
             id_entry.setFixedWidth(80)
-            id_entry.setStyleSheet(self._entry_style())
+            id_entry.setStyleSheet(entry_style(self._theme_colors))
             row_layout.addWidget(id_entry)
 
             label_entry = QLineEdit(s.get("label", ""))
             label_entry.setFixedWidth(80)
-            label_entry.setStyleSheet(self._entry_style())
+            label_entry.setStyleSheet(entry_style(self._theme_colors))
             row_layout.addWidget(label_entry)
 
             kw_entry = QLineEdit(s.get("prompt_keyword", ""))
             kw_entry.setFixedWidth(150)
-            kw_entry.setStyleSheet(self._entry_style())
+            kw_entry.setStyleSheet(entry_style(self._theme_colors))
             row_layout.addWidget(kw_entry)
 
             del_btn = QPushButton("−")
             del_btn.setFixedSize(24, 24)
-            del_btn.setStyleSheet("""
-                QPushButton { background: #f38ba8; color: #fff; border: none;
-                              border-radius: 4px; font-size: 14px; font-weight: bold; }
-                QPushButton:hover { background: #f06292; }
-                QPushButton:disabled { background: #45475a; color: #585b70; }
-            """)
+            del_btn.setStyleSheet(self._del_btn_style())
             row_layout.addWidget(del_btn)
             row_layout.addStretch()
 
@@ -616,17 +612,13 @@ class SettingsPanel(QDialog):
         # "+" add button
         add_btn = QPushButton(t("settings.btn.add_style"))
         add_btn.setFixedHeight(30)
-        add_btn.setStyleSheet("""
-            QPushButton { background: transparent; color: #6c5ce7; border: 1px dashed #6c5ce7;
-                          border-radius: 6px; font-size: 12px; font-weight: 500; }
-            QPushButton:hover { background: rgba(108, 92, 231, 0.1); }
-        """)
+        add_btn.setStyleSheet(self._add_style_btn_style())
         add_btn.clicked.connect(lambda: self._add_style_row())
         layout.addWidget(add_btn)
         self._style_add_btn = add_btn
 
         restart_styles = QLabel(t("settings.restart_required"))
-        restart_styles.setStyleSheet("color: #f9e2af; font-size: 10px; padding-left: 4px;")
+        restart_styles.setStyleSheet(label_style(self._theme_colors, "yellow", "font-size: 10px; padding-left: 4px;"))
         layout.addWidget(restart_styles)
 
         self._update_style_delete_buttons()
@@ -640,31 +632,26 @@ class SettingsPanel(QDialog):
         row = QWidget()
         row_layout = QHBoxLayout(row)
         row_layout.setContentsMargins(6, 2, 6, 2)
-        row.setStyleSheet("background: #313244; border-radius: 4px;")
+        row.setStyleSheet(f"background: {self._theme_colors['surface']}; border-radius: 4px;")
 
         id_entry = QLineEdit(id_val)
         id_entry.setFixedWidth(80)
-        id_entry.setStyleSheet(self._entry_style())
+        id_entry.setStyleSheet(entry_style(self._theme_colors))
         row_layout.addWidget(id_entry)
 
         label_entry = QLineEdit(label_val)
         label_entry.setFixedWidth(80)
-        label_entry.setStyleSheet(self._entry_style())
+        label_entry.setStyleSheet(entry_style(self._theme_colors))
         row_layout.addWidget(label_entry)
 
         kw_entry = QLineEdit(keyword_val)
         kw_entry.setFixedWidth(150)
-        kw_entry.setStyleSheet(self._entry_style())
+        kw_entry.setStyleSheet(entry_style(self._theme_colors))
         row_layout.addWidget(kw_entry)
 
         del_btn = QPushButton("−")
         del_btn.setFixedSize(24, 24)
-        del_btn.setStyleSheet("""
-            QPushButton { background: #f38ba8; color: #fff; border: none;
-                          border-radius: 4px; font-size: 14px; font-weight: bold; }
-            QPushButton:hover { background: #f06292; }
-            QPushButton:disabled { background: #45475a; color: #585b70; }
-        """)
+        del_btn.setStyleSheet(self._del_btn_style())
         row_layout.addWidget(del_btn)
         row_layout.addStretch()
 
@@ -691,6 +678,7 @@ class SettingsPanel(QDialog):
     def _build_trigger_tab(self):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         w = QWidget()
         layout = QVBoxLayout(w)
@@ -706,7 +694,7 @@ class SettingsPanel(QDialog):
         try:
             self._hk_trigger.textChanged.disconnect()
         except RuntimeError:
-            pass
+            pass  # Signal was not connected; safe to ignore.
         self._hk_trigger.textChanged.connect(
             lambda text, e=self._hk_trigger, s=self._hk_trigger_status:
                 self._on_hotkey_text_changed_trigger(text, e, s))
@@ -717,7 +705,7 @@ class SettingsPanel(QDialog):
             layout, t("settings.label.toggle_ball"), trigger_cfg.get("hotkey_toggle_ball", "ctrl+shift+b"))
 
         restart_lbl = QLabel(t("settings.restart_required"))
-        restart_lbl.setStyleSheet("color: #f9e2af; font-size: 10px; padding-left: 120px;")
+        restart_lbl.setStyleSheet(label_style(self._theme_colors, "yellow", "font-size: 10px; padding-left: 120px;"))
         layout.addWidget(restart_lbl)
 
         layout.addStretch()
@@ -788,14 +776,14 @@ class SettingsPanel(QDialog):
                 return False
         return modifier_count >= 1 and key_count == 1 and modifier_count <= 3
 
-    @staticmethod
-    def _hotkey_entry_style(valid: bool = True) -> str:
-        border = "#45475a" if valid else "#f38ba8"
+    def _hotkey_entry_style(self, valid: bool = True) -> str:
+        t = self._theme_colors
+        border = t["border"] if valid else t["red"]
         return (
-            f"QLineEdit {{ background: #181825; color: #cdd6f4;"
+            f"QLineEdit {{ background: {t['bg_darker']}; color: {t['text']};"
             f" border: 1px solid {border}; border-radius: 6px;"
             f" padding: 6px 10px; font-size: 12px; }}"
-            f" QLineEdit:focus {{ border-color: #6c5ce7; }}"
+            f" QLineEdit:focus {{ border-color: {t['accent']}; }}"
         )
 
     def _build_hotkey_row(self, layout, label_text, default_value):
@@ -805,7 +793,7 @@ class SettingsPanel(QDialog):
 
         lbl = QLabel(label_text)
         lbl.setFixedWidth(120)
-        lbl.setStyleSheet("color: #a6adc8;")
+        lbl.setStyleSheet(label_style(self._theme_colors, "text_muted"))
         row_layout.addWidget(lbl)
 
         entry = QLineEdit(default_value)
@@ -815,7 +803,7 @@ class SettingsPanel(QDialog):
 
         status = QLabel("")
         status.setFixedWidth(80)
-        status.setStyleSheet("color: #f38ba8; font-size: 11px;")
+        status.setStyleSheet(label_style(self._theme_colors, "red", "font-size: 11px;"))
         row_layout.addWidget(status)
 
         layout.addWidget(row)
@@ -852,6 +840,7 @@ class SettingsPanel(QDialog):
     def _build_appearance_tab(self):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         w = QWidget()
         layout = QVBoxLayout(w)
@@ -867,32 +856,37 @@ class SettingsPanel(QDialog):
         theme_layout.setContentsMargins(0, 0, 0, 0)
         theme_layout.addWidget(QLabel(t("settings.label.theme")))
         self._theme_combo = NoScrollComboBox()
-        self._theme_combo.addItem(t("settings.theme.dark"), "dark")
-        idx = self._theme_combo.findData(appearance_cfg.get("theme", "dark"))
+        current_theme = resolve_theme_name(appearance_cfg.get("theme", "dark"))
+        for theme_name in list_themes():
+            self._theme_combo.addItem(theme_name, theme_name)
+        idx = self._theme_combo.findData(current_theme)
         if idx >= 0:
             self._theme_combo.setCurrentIndex(idx)
-        self._theme_combo.setStyleSheet(self._combo_style())
+        self._theme_combo.setStyleSheet(combo_style(self._theme_colors))
         self._theme_combo.setFixedWidth(200)
+        self._theme_combo.currentIndexChanged.connect(
+            lambda: self.theme_applied.emit(resolve_theme_name(self._theme_combo.currentData()))
+        )
         theme_layout.addWidget(self._theme_combo)
         theme_layout.addStretch()
         layout.addWidget(theme_row)
 
         self._startup_cb = QCheckBox(t("settings.checkbox.auto_start"))
         self._startup_cb.setChecked(general_cfg.get("start_with_windows", False))
-        self._startup_cb.setStyleSheet("color: #cdd6f4;")
+        self._startup_cb.setStyleSheet(label_style(self._theme_colors, "text"))
         layout.addWidget(self._startup_cb)
         rl_setup = QLabel(t("settings.restart_required"))
-        rl_setup.setStyleSheet("color: #f9e2af; font-size: 10px; padding-left: 4px;")
+        rl_setup.setStyleSheet(label_style(self._theme_colors, "yellow", "font-size: 10px; padding-left: 4px;"))
         layout.addWidget(rl_setup)
 
         self._start_min_cb = QCheckBox(t("settings.checkbox.start_minimized"))
         self._start_min_cb.setChecked(general_cfg.get("start_minimized", False))
-        self._start_min_cb.setStyleSheet("color: #cdd6f4;")
+        self._start_min_cb.setStyleSheet(label_style(self._theme_colors, "text"))
         layout.addWidget(self._start_min_cb)
 
         self._auto_close_cb = QCheckBox(t("settings.checkbox.auto_close"))
         self._auto_close_cb.setChecked(general_cfg.get("replace_auto_close", False))
-        self._auto_close_cb.setStyleSheet("color: #cdd6f4;")
+        self._auto_close_cb.setStyleSheet(label_style(self._theme_colors, "text"))
         layout.addWidget(self._auto_close_cb)
 
         layout.addSpacing(12)
@@ -901,7 +895,7 @@ class SettingsPanel(QDialog):
         self._ball_size = self._add_entry(layout, t("settings.label.ball_size"), str(ball_cfg.get("size", 30)))
 
         restart_appear = QLabel(t("settings.restart_required"))
-        restart_appear.setStyleSheet("color: #f9e2af; font-size: 10px; padding-left: 4px;")
+        restart_appear.setStyleSheet(label_style(self._theme_colors, "yellow", "font-size: 10px; padding-left: 4px;"))
         layout.addWidget(restart_appear)
 
         # ── Custom CSS section ──────────────────────────────────────────
@@ -913,9 +907,8 @@ class SettingsPanel(QDialog):
         from PySide6.QtGui import QFont
         self._custom_css_editor.setFont(QFont("Consolas", 11))
         self._custom_css_editor.setStyleSheet(
-            "QTextEdit { background: #181825; color: #cdd6f4;"
-            " border: 1px solid #45475a; border-radius: 6px;"
-            " padding: 6px; font-family: Consolas; font-size: 11px; }"
+            text_edit_style(self._theme_colors)
+            + " QTextEdit { font-family: Consolas; font-size: 11px; }"
         )
         self._custom_css_editor.setPlaceholderText(t("settings.placeholder.css"))
         self._custom_css_editor.setPlainText(appearance_cfg.get("custom_css", ""))
@@ -934,13 +927,13 @@ class SettingsPanel(QDialog):
 
         validate_btn = QPushButton(t("settings.btn.validate"))
         validate_btn.setFixedSize(80, 26)
-        validate_btn.setStyleSheet(self._small_btn_style())
+        validate_btn.setStyleSheet(btn_style(self._theme_colors))
         validate_btn.clicked.connect(self._on_validate_css)
         btn_layout.addWidget(validate_btn)
 
         preview_btn = QPushButton(t("settings.btn.preview"))
         preview_btn.setFixedSize(80, 26)
-        preview_btn.setStyleSheet(self._small_btn_style())
+        preview_btn.setStyleSheet(btn_style(self._theme_colors))
         preview_btn.clicked.connect(self._on_preview_css)
         btn_layout.addWidget(preview_btn)
 
@@ -950,20 +943,18 @@ class SettingsPanel(QDialog):
         self._preview_frame = QFrame()
         self._preview_frame.setMinimumHeight(80)
         self._preview_frame.setStyleSheet(
-            "QFrame { background: #1e1e2e; border: 1px solid #45475a;"
-            " border-radius: 6px; padding: 8px; }"
+            f"QFrame {{ background: {self._theme_colors['bg']};"
+            f" border: 1px solid {self._theme_colors['border']};"
+            f" border-radius: 6px; padding: 8px; }}"
         )
         preview_frame_layout = QVBoxLayout(self._preview_frame)
         preview_label = QLabel(t("settings.preview.text"))
-        preview_label.setStyleSheet("color: #cdd6f4; font-size: 12px; background: transparent;")
+        preview_label.setStyleSheet(label_style(self._theme_colors, "text", "font-size: 12px;"))
         preview_frame_layout.addWidget(preview_label)
         preview_btn_sample = QPushButton(t("settings.preview.button"))
         preview_btn_sample.setFixedSize(80, 24)
-        preview_btn_sample.setStyleSheet(
-            "QPushButton { background: #6c5ce7; color: white; border: none;"
-            " border-radius: 4px; font-size: 11px; }"
-            "QPushButton:hover { background: #7c6cf7; }"
-        )
+        preview_btn_sample.setStyleSheet(action_btn_style(self._theme_colors, "accent"))
+        self._preview_btn_sample = preview_btn_sample
         preview_frame_layout.addWidget(preview_btn_sample)
         layout.addWidget(self._preview_frame)
         self._preview_frame.hide()  # Hidden until Preview is clicked
@@ -979,12 +970,12 @@ class SettingsPanel(QDialog):
         row_layout.setContentsMargins(0, 0, 0, 0)
         lbl = QLabel(label_text)
         lbl.setFixedWidth(120)
-        lbl.setStyleSheet("color: #a6adc8;")
+        lbl.setStyleSheet(label_style(self._theme_colors, "text_muted"))
         row_layout.addWidget(lbl)
         entry = QLineEdit(default_value)
         if password:
             entry.setEchoMode(QLineEdit.Password)
-        entry.setStyleSheet(self._entry_style())
+        entry.setStyleSheet(entry_style(self._theme_colors))
         row_layout.addWidget(entry, 1)
         layout.addWidget(row)
         return entry
@@ -1067,6 +1058,7 @@ class SettingsPanel(QDialog):
         if "appearance" not in data:
             data["appearance"] = {}
         data["appearance"]["theme"] = self._theme_combo.currentData()
+        self.theme_applied.emit(resolve_theme_name(self._theme_combo.currentData()))
         data["appearance"]["custom_css"] = self._custom_css_editor.toPlainText()
 
         try:
@@ -1089,22 +1081,140 @@ class SettingsPanel(QDialog):
         config.save()
         self.accept()
 
+    def _on_theme_changed(self, name: str):
+        self._theme_colors = get_theme(name)["colors"]
+        t = self._theme_colors
+
+        # Dialog background
+        self.setStyleSheet(f"QDialog {{ background: {t['bg']}; }}")
+
+        # Tab widget
+        self._tabs.setStyleSheet(tab_style(t))
+
+        # Save button
+        self._save_btn.setStyleSheet(action_btn_style(t, "accent"))
+
+        # Theme combo
+        self._theme_combo.setStyleSheet(combo_style(t))
+
+        # Harper dialect combo
+        self._harper_dialect.setStyleSheet(combo_style(t))
+
+        # Assign model combos
+        for attr in ("_assign_optimize_model", "_assign_translate_model"):
+            c = getattr(self, attr, None)
+            if c:
+                c.setStyleSheet(combo_style(t))
+
+        # Model entries
+        for entries in self._model_entries.values():
+            entries["provider_combo"].setStyleSheet(combo_style(t))
+            entries["model_combo"].setStyleSheet(combo_style(t))
+            for ek in ("api_base", "api_key", "max_tokens", "extra_params"):
+                if ek in entries:
+                    entries[ek].setStyleSheet(entry_style(t))
+            entries["temperature_slider"].setStyleSheet(self._slider_style())
+            entries["status"].setStyleSheet(label_style(t, "text_muted", "font-size: 11px; padding: 2px 8px;"))
+
+        # Style entries
+        for entry in self._style_entries:
+            entry["id"].setStyleSheet(entry_style(t))
+            entry["label"].setStyleSheet(entry_style(t))
+            entry["keyword"].setStyleSheet(entry_style(t))
+            entry["delete_btn"].setStyleSheet(self._del_btn_style())
+            entry["row"].setStyleSheet(f"background: {t['surface']}; border-radius: 4px;")
+        self._style_add_btn.setStyleSheet(self._add_style_btn_style())
+
+        # Hotkey entries
+        hk_trigger_valid = self._validate_trigger_hotkey(self._hk_trigger.text()) if self._hk_trigger.text().strip() else False
+        self._hk_trigger.setStyleSheet(self._hotkey_entry_style(hk_trigger_valid))
+        hk_toggle_valid = self._validate_hotkey(self._hk_toggle.text()) if self._hk_toggle.text().strip() else False
+        self._hk_toggle.setStyleSheet(self._hotkey_entry_style(hk_toggle_valid))
+        self._hk_trigger_status.setStyleSheet(label_style(t, "red", "font-size: 11px;"))
+        self._hk_toggle_status.setStyleSheet(label_style(t, "red", "font-size: 11px;"))
+
+        # Hotkey validation re-run
+        if hk_trigger_valid:
+            self._hk_trigger_status.setText("")
+        if hk_toggle_valid:
+            self._hk_toggle_status.setText("")
+
+        # Checkboxes
+        self._startup_cb.setStyleSheet(label_style(t, "text"))
+        self._start_min_cb.setStyleSheet(label_style(t, "text"))
+        self._auto_close_cb.setStyleSheet(label_style(t, "text"))
+
+        # Ball entries
+        self._ball_opacity.setStyleSheet(entry_style(t))
+        self._ball_size.setStyleSheet(entry_style(t))
+
+        # Custom CSS editor
+        self._custom_css_editor.setStyleSheet(
+            text_edit_style(t) + " QTextEdit { font-family: Consolas; font-size: 11px; }"
+        )
+
+        # Preview frame
+        self._preview_frame.setStyleSheet(
+            f"QFrame {{ background: {t['bg']}; border: 1px solid {t['border']};"
+            f" border-radius: 6px; padding: 8px; }}"
+        )
+
+        # Preview sample button
+        if hasattr(self, '_preview_btn_sample'):
+            self._preview_btn_sample.setStyleSheet(action_btn_style(t, "accent"))
+
+        # Language combo
+        self._lang_combo.setStyleSheet(combo_style(t))
+
+        self.update()
+
     def _on_validate_css(self):
         css = self._custom_css_editor.toPlainText()
         opens = css.count("{")
         closes = css.count("}")
         if opens == closes:
             self._css_status_label.setText(t("settings.css.ok"))
-            self._css_status_label.setStyleSheet("color: #a6e3a1; font-size: 11px;")
+            self._css_status_label.setStyleSheet(label_style(self._theme_colors, "green", "font-size: 11px;"))
         else:
             self._css_status_label.setText(t("settings.css.bracket_mismatch"))
-            self._css_status_label.setStyleSheet("color: #f38ba8; font-size: 11px;")
+            self._css_status_label.setStyleSheet(label_style(self._theme_colors, "red", "font-size: 11px;"))
 
     def _on_preview_css(self):
         css = self._custom_css_editor.toPlainText()
         if self._preview_frame:
             self._preview_frame.setStyleSheet(css)
             self._preview_frame.show()
+
+    # ── Theme-dependent style helpers ──────────────────────────────────────
+
+    def _slider_style(self):
+        t = self._theme_colors
+        return (
+            f"QSlider::groove:horizontal {{ height: 6px; background: {t['surface']};"
+            f" border-radius: 3px; }}"
+            f"QSlider::handle:horizontal {{ background: {t['accent']};"
+            f" width: 14px; height: 14px; margin: -4px 0; border-radius: 7px; }}"
+            f"QSlider::handle:horizontal:hover {{ background: {t['accent_hover']}; }}"
+            f"QSlider::sub-page:horizontal {{ background: {t['accent']}; border-radius: 3px; }}"
+        )
+
+    def _del_btn_style(self):
+        t = self._theme_colors
+        return (
+            f"QPushButton {{ background: {t['red']}; color: {t['white']};"
+            f" border: none; border-radius: 4px; font-size: 14px; font-weight: bold; }}"
+            f"QPushButton:hover {{ background: {t['red_hover']}; }}"
+            f"QPushButton:disabled {{ background: {t['surface']}; color: {t['text_dim']}; }}"
+        )
+
+    def _add_style_btn_style(self):
+        t = self._theme_colors
+        return (
+            f"QPushButton {{ background: transparent; color: {t['accent']};"
+            f" border: 1px dashed {t['accent']}; border-radius: 6px;"
+            f" font-size: 12px; font-weight: 500; }}"
+            f"QPushButton:hover {{ background: {rgba(t['accent'], 26)}; }}"
+        )
 
     def _retranslate_ui(self):
         """Re-apply translations after language change."""
@@ -1119,13 +1229,14 @@ class SettingsPanel(QDialog):
     def _build_language_tab(self):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         w = QWidget()
         layout = QVBoxLayout(w)
         layout.setSpacing(8)
 
         desc = QLabel(t("settings.label.language_desc"))
-        desc.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        desc.setStyleSheet(label_style(self._theme_colors, "text_muted", "font-size: 12px;"))
         desc.setWordWrap(True)
         layout.addWidget(desc)
 
@@ -1134,12 +1245,12 @@ class SettingsPanel(QDialog):
         lang_rl.setContentsMargins(0, 0, 0, 0)
         lang_lbl = QLabel(t("settings.label.language"))
         lang_lbl.setFixedWidth(120)
-        lang_lbl.setStyleSheet("color: #a6adc8;")
+        lang_lbl.setStyleSheet(label_style(self._theme_colors, "text_muted"))
         lang_rl.addWidget(lang_lbl)
 
         self._lang_combo = NoScrollComboBox()
         self._lang_combo.setFixedWidth(200)
-        self._lang_combo.setStyleSheet(self._combo_style())
+        self._lang_combo.setStyleSheet(combo_style(self._theme_colors))
         for code, name in SUPPORTED_LANGUAGES.items():
             self._lang_combo.addItem(name, code)
         current_lang = get_language()
@@ -1161,30 +1272,3 @@ class SettingsPanel(QDialog):
         lang_code = self._lang_combo.itemData(idx)
         if lang_code:
             set_language(lang_code)
-
-    @staticmethod
-    def _small_btn_style():
-        return """
-            QPushButton { background: #45475a; color: #cdd6f4; border: none;
-                          border-radius: 6px; font-size: 12px; padding: 4px 12px; }
-            QPushButton:hover { background: #6c5ce7; color: #fff; }
-        """
-
-    @staticmethod
-    def _entry_style():
-        return "QLineEdit { background: #181825; color: #cdd6f4; border: 1px solid #45475a; border-radius: 6px; padding: 6px 10px; font-size: 12px; } QLineEdit:focus { border-color: #6c5ce7; }"
-
-    @staticmethod
-    def _combo_style():
-        return """
-            NoScrollComboBox { background: #181825; color: #cdd6f4; border: 1px solid #45475a;
-                        border-radius: 6px; padding: 6px 24px 6px 10px; font-size: 12px; }
-            NoScrollComboBox:hover { border-color: #6c5ce7; }
-            NoScrollComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top right;
-                                   width: 22px; border-left: 1px solid #45475a;
-                                   border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
-            NoScrollComboBox::down-arrow { width: 10px; height: 10px; }
-            NoScrollComboBox QAbstractItemView { background: #181825; color: #cdd6f4;
-                                          selection-background-color: #6c5ce7;
-                                          border: 1px solid #45475a; border-radius: 4px; }
-        """
