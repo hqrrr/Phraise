@@ -11,7 +11,7 @@ import threading
 
 import shiboken6
 
-from PySide6.QtCore import Qt, Signal, QSortFilterProxyModel
+from PySide6.QtCore import Qt, QSortFilterProxyModel
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QScrollArea,
     QWidget, QLabel, QLineEdit, QCheckBox, QComboBox, QPushButton,
@@ -39,10 +39,12 @@ class NoScrollComboBox(QComboBox):
         if view is not None:
             view.setMaximumWidth(self.width())
             view.setTextElideMode(Qt.ElideRight)
+            view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         completer_popup = self.completer().popup() if self.completer() else None
         if completer_popup is not None:
             completer_popup.setMaximumWidth(self.width())
             completer_popup.setTextElideMode(Qt.ElideRight)
+            completer_popup.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         super().showPopup()
 
     def hidePopup(self):
@@ -59,8 +61,6 @@ class NoScrollComboBox(QComboBox):
 class SettingsPanel(QDialog):
     """Settings panel for configuring models, styles, triggers, and appearance."""
 
-    theme_applied = Signal(str)
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self._theme_colors = get_theme(theme_notifier.current_theme)["colors"]
@@ -76,6 +76,8 @@ class SettingsPanel(QDialog):
 
         self._registered_listener = False
         self._is_closing = False
+        self._saved = False
+        self._original_theme = resolve_theme_name(config.get("appearance", "theme", default="dark"))
         self._provider_combos: list[QComboBox] = []
 
         self._build_ui()
@@ -88,6 +90,22 @@ class SettingsPanel(QDialog):
         ))
 
         init_providers(callback=self._on_providers_loaded)
+
+    def closeEvent(self, event):
+        if not self._saved and not self._is_closing:
+            self._is_closing = True
+            self._revert_theme()
+        super().closeEvent(event)
+
+    def reject(self):
+        if not self._saved and not self._is_closing:
+            self._is_closing = True
+            self._revert_theme()
+        super().reject()
+
+    def _revert_theme(self):
+        if theme_notifier.current_theme != self._original_theme:
+            theme_notifier.set_theme(self._original_theme)
 
     def _on_providers_loaded(self):
         if self._is_closing:
@@ -297,6 +315,7 @@ class SettingsPanel(QDialog):
         combo = self._build_searchable_combo()
         self._populate_provider_combo(combo)
         combo.setStyleSheet(combo_style(self._theme_colors))
+        combo.setMinimumWidth(200)
         rl.addWidget(combo, 1)
         layout.addWidget(row)
 
@@ -369,6 +388,7 @@ class SettingsPanel(QDialog):
             model_combo.addItem(model_name)
             model_combo.setCurrentText(model_name)
         model_combo.setStyleSheet(combo_style(self._theme_colors))
+        model_combo.setMinimumWidth(200)
         ml.addWidget(model_combo, 1)
 
         fetch_btn = QPushButton(t("settings.btn.fetch_models"))
@@ -864,9 +884,7 @@ class SettingsPanel(QDialog):
             self._theme_combo.setCurrentIndex(idx)
         self._theme_combo.setStyleSheet(combo_style(self._theme_colors))
         self._theme_combo.setFixedWidth(200)
-        self._theme_combo.currentIndexChanged.connect(
-            lambda: self.theme_applied.emit(resolve_theme_name(self._theme_combo.currentData()))
-        )
+        self._theme_combo.currentIndexChanged.connect(self._on_theme_combo_changed)
         theme_layout.addWidget(self._theme_combo)
         theme_layout.addStretch()
         layout.addWidget(theme_row)
@@ -1058,8 +1076,9 @@ class SettingsPanel(QDialog):
         if "appearance" not in data:
             data["appearance"] = {}
         data["appearance"]["theme"] = self._theme_combo.currentData()
-        self.theme_applied.emit(resolve_theme_name(self._theme_combo.currentData()))
         data["appearance"]["custom_css"] = self._custom_css_editor.toPlainText()
+
+        self._saved = True
 
         try:
             opacity_val = float(self._ball_opacity.text() or "0.85")
@@ -1080,6 +1099,10 @@ class SettingsPanel(QDialog):
 
         config.save()
         self.accept()
+
+    def _on_theme_combo_changed(self):
+        theme_name = resolve_theme_name(self._theme_combo.currentData())
+        theme_notifier.set_theme(theme_name)
 
     def _on_theme_changed(self, name: str):
         self._theme_colors = get_theme(name)["colors"]

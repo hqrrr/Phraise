@@ -73,6 +73,11 @@ class PhrAIseApp:
         self._tray.activated.connect(self._on_tray_activated)
         self._tray.show()
         add_listener(self._rebuild_menus)
+        theme_notifier.theme_changed.connect(self._update_tray_icon)
+
+    def _update_tray_icon(self, _name: str):
+        if self._tray:
+            self._tray.setIcon(self._create_tray_icon())
 
     def _on_tray_activated(self, reason):
         if reason == QSystemTrayIcon.DoubleClick:
@@ -138,7 +143,6 @@ class PhrAIseApp:
         from .settings_panel import SettingsPanel
         parent = self._window if self._window else None
         dlg = SettingsPanel(parent)
-        dlg.theme_applied.connect(theme_notifier.set_theme)
         dlg.exec()
 
     def _hotkey_trigger(self):
@@ -200,6 +204,10 @@ class PhrAIseApp:
 
     @staticmethod
     def _create_tray_icon() -> QIcon:
+        from pathlib import Path
+        icon_path = Path(__file__).parent / "assets" / "ball_icon.png"
+        if icon_path.exists():
+            return QIcon(str(icon_path))
         from .theme import get_theme, theme_notifier
         colors = get_theme(theme_notifier.current_theme)["colors"]
         size = 64
