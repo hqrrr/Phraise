@@ -90,7 +90,10 @@
 >
 > 请查看 [Coding Plan Status](Coding_Plan.md) 确认 PhrAIse 是否被允许使用他们的 coding plan。
 
-> 💵 如果你正在寻找免费的LLM API，这个仓库或许能帮到你：[Free LLM API resources](https://github.com/cheahjs/free-llm-api-resources)
+> 💵 如果你正在寻找免费的LLM API，下面这些仓库或许能帮到你：
+> 
+> - [Free LLM API resources](https://github.com/cheahjs/free-llm-api-resources)
+> - [Awesome Free LLM APIs](https://github.com/mnfst/awesome-free-llm-apis)
 
 ## 配置说明
 

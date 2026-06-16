@@ -94,7 +94,10 @@ The built-in provider list is fetched from **[models.dev](https://github.com/ano
 >
 > Please check [Coding Plan Status](Coding_Plan.md) whether PhrAIse is allowed to use their coding plans.
 
-> 💵 If you're looking for free LLM API, this repo may help you: [Free LLM API resources](https://github.com/cheahjs/free-llm-api-resources)
+> 💵 If you're looking for free LLM API, the following repos may help you:
+> 
+> - [Free LLM API resources](https://github.com/cheahjs/free-llm-api-resources)
+> - [Awesome Free LLM APIs](https://github.com/mnfst/awesome-free-llm-apis)
 
 ## Configuration
 
