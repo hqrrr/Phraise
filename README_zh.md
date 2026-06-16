@@ -2,10 +2,11 @@
 
 <img src="phraise/assets/phraise_logo.svg" alt="PhrAIse Logo" width="100"/>
 
-[![License](https://img.shields.io/github/license/hqrrr/Phraise?color=888)](LICENSE)&nbsp;
-[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2B-4c8eda)](https://github.com/hqrrr/Phraise)&nbsp;
-[![Python](https://img.shields.io/badge/Python-3.11%2B-4c8eda)](https://python.org)&nbsp;
-[![Downloads](https://img.shields.io/github/downloads/hqrrr/Phraise/total?color=4c8eda)](https://github.com/hqrrr/Phraise/releases)
+[![Downloads](https://img.shields.io/github/downloads/hqrrr/Phraise/total?color=4c8eda)](https://github.com/hqrrr/Phraise/releases)&nbsp;
+[![Release](https://img.shields.io/github/v/release/hqrrr/Phraise?label=release&color=4c8eda)](https://github.com/hqrrr/Phraise/releases)
+&nbsp;
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2B-4c8eda)](https://github.com/hqrrr/Phraise)&nbsp;
+[![License](https://img.shields.io/badge/license-GPL--3.0-lightgray)](LICENSE)
 
 > 系统级 AI 写作助手。使用你自己的 LLM API Key，或者本地运行语法检查 —— 无订阅费，不绑定服务商，完全可控。
 
@@ -125,25 +126,25 @@ python build.py
 
 ```text
 Phraise/
-├── build.py              # PyInstaller 打包脚本
+├── build.py                    # PyInstaller 打包脚本
 ├── phraise/
-│   ├── main.py           # 应用入口与生命周期管理
-│   ├── config.py         # JSON 配置管理
-│   ├── i18n.py           # 多语言支持
-│   ├── theme.py          # 主题与 CSS 配置
-│   ├── prompts.py        # LLM 提示词模板
-│   ├── llm_client.py     # OpenAI 兼容 API 客户端
-│   ├── harper_client.py  # 本地 Harper 语法引擎客户端
-│   ├── harper_lsp_manager.py # Harper LSP 子进程管理
-│   ├── settings_panel.py # 设置面板（模型、风格、快捷键、外观）
-│   ├── floating_ball.py  # 可拖拽置顶悬浮球
-│   ├── floating_window.py# 主窗口（优化 / 翻译）
-│   ├── hotkeys.py        # 全局快捷键监听
-│   ├── text_grabber.py   # UIA 文本提取与替换
-│   ├── detector.py       # 活动窗口检测
-│   ├── dispatch.py       # 线程安全主线程调度
-│   ├── error_log.py      # 错误日志
-│   └── assets/           # 图标与资源文件
+│   ├── main.py                 # 应用入口与生命周期管理
+│   ├── config.py               # JSON 配置管理
+│   ├── i18n.py                 # 多语言支持
+│   ├── theme.py                # 主题与 CSS 配置
+│   ├── prompts.py              # LLM 提示词模板
+│   ├── llm_client.py           # OpenAI 兼容 API 客户端
+│   ├── harper_client.py        # 本地 Harper 语法引擎客户端
+│   ├── harper_lsp_manager.py   # Harper LSP 子进程管理
+│   ├── settings_panel.py       # 设置面板（模型、风格、快捷键、外观）
+│   ├── floating_ball.py        # 可拖拽置顶悬浮球
+│   ├── floating_window.py      # 主窗口（优化 / 翻译）
+│   ├── hotkeys.py              # 全局快捷键监听
+│   ├── text_grabber.py         # UIA 文本提取与替换
+│   ├── detector.py             # 活动窗口检测
+│   ├── dispatch.py             # 线程安全主线程调度
+│   ├── error_log.py            # 错误日志
+│   └── assets/                 # 图标与资源文件
 └── README.md
 ```
 
