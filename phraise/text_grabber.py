@@ -9,6 +9,7 @@ import threading
 import time
 
 import pyperclip
+from typing import Any
 
 from .config import config
 from .error_log import write_error
@@ -31,6 +32,8 @@ class TextGrabber:
         self._original_clipboard: str = ""
         self._clipboard_saved: bool = False
         self._foreground_control = None
+        self._selection_range: Any | None = None
+        self._selection_text: str = ""
         self._state_lock = threading.Lock()
 
     def capture_foreground(self):
@@ -40,9 +43,32 @@ class TextGrabber:
             control = uia.GetFocusedControl()
             with self._state_lock:
                 self._foreground_control = control
+                self._selection_range = None
+                self._selection_text = ""
+                try:
+                    tp = control.GetTextPattern()
+                    if tp:
+                        selection = tp.GetSelection()
+                        if selection:
+                            for rng in selection:
+                                if rng is not None:
+                                    try:
+                                        text = rng.GetText(-1)
+                                        if text is not None:
+                                            self._selection_text = text
+                                    except Exception as e:
+                                        write_error(e, "capture_foreground:GetText")
+                                    self._selection_range = rng
+                                    break
+                except AttributeError:
+                    pass
+                except Exception as e:
+                    write_error(e, "capture_foreground:GetTextPattern")
         except Exception:
             with self._state_lock:
                 self._foreground_control = None
+                self._selection_range = None
+                self._selection_text = ""
 
     def get_selected_text(self, use_clipboard: bool = True) -> str:
         text = self._get_selected_via_uia()
@@ -164,12 +190,49 @@ class TextGrabber:
 
             with self._state_lock:
                 control = self._foreground_control
+                saved_range = self._selection_range
             if control is None:
                 control = uia.GetFocusedControl()
             if control is None:
                 return False
 
             for _ in range(3):
+                if saved_range is not None:
+                    try:
+                        saved_range.Select()
+                        control.SendKeys(self._escape_sendkeys(new_text))
+                        return True
+                    except Exception as e:
+                        write_error(e, "_replace_via_uia:saved_range.Select")
+                        with self._state_lock:
+                            self._selection_range = None
+                        saved_range = None
+
+                tp = None
+                try:
+                    tp = control.GetTextPattern()
+                except AttributeError:
+                    pass
+                except Exception as e:
+                    write_error(e, "_replace_via_uia:GetTextPattern")
+
+                if tp is not None:
+                    try:
+                        selection = tp.GetSelection()
+                        if selection and selection[0] is not None:
+                            rng = selection[0]
+                            rng.Select()
+                            control.SendKeys(self._escape_sendkeys(new_text))
+                            return True
+
+                        doc_range = tp.DocumentRange()
+                        if doc_range:
+                            doc_range.Select()
+                            control.SendKeys(self._escape_sendkeys(new_text))
+                            return True
+                    except Exception as e:
+                        write_error(e, "_replace_via_uia:GetTextPattern")
+
                 try:
                     vp = control.GetValuePattern()
                     if vp:
@@ -179,27 +242,6 @@ class TextGrabber:
                     pass
                 except Exception as e:
                     write_error(e, "_replace_via_uia:GetValuePattern")
-
-                try:
-                    tp = control.GetTextPattern()
-                    if tp:
-                        selection = tp.GetSelection()
-                        if selection and selection[0]:
-                            rng = selection[0]
-                            rng.Select()
-                            control.SendKeys(self._escape_sendkeys(new_text))
-                            return True
-                        else:
-                            # No active selection; select all and replace
-                            doc_range = tp.DocumentRange()
-                            if doc_range:
-                                doc_range.Select()
-                                control.SendKeys(self._escape_sendkeys(new_text))
-                                return True
-                except AttributeError:
-                    pass
-                except Exception as e:
-                    write_error(e, "_replace_via_uia:GetTextPattern")
 
                 try:
                     parent = control.GetParentControl()

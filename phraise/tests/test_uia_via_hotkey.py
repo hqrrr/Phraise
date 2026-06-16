@@ -72,6 +72,7 @@ class TestUIATextGrabMTA(unittest.TestCase):
 
         vp_mock = MagicMock()
         control_mock.GetValuePattern.return_value = vp_mock
+        control_mock.GetTextPattern.side_effect = AttributeError("no TextPattern")
 
         with patch.dict("sys.modules", pythoncom=pythoncom_mock, uiautomation=uia_mock):
             pythoncom_mock.CoInitializeEx(pythoncom_mock.COINIT_MULTITHREADED)
