@@ -11,6 +11,7 @@ from .theme import (
     combo_style, entry_style, btn_style, tab_style, action_btn_style,
     label_style, text_edit_style, get_theme, theme_notifier,
     resolve_theme_name, rgba, list_themes, FONT_FAMILY_MONO,
+    _contrast_text_color, _muted_text_color,
 )
 
 import threading
@@ -1229,16 +1230,17 @@ class SettingsPanel(QDialog):
     def _del_btn_style(self):
         t = self._theme_colors
         return (
-            f"QPushButton {{ background: {t['red']}; color: {t['white']};"
+            f"QPushButton {{ background: {t['red']}; color: {_contrast_text_color(t, t['red'])};"
             f" border: none; border-radius: 4px; font-size: 14px; font-weight: bold; }}"
             f"QPushButton:hover {{ background: {t['red_hover']}; }}"
-            f"QPushButton:disabled {{ background: {t['surface']}; color: {t['text_dim']}; }}"
+            f"QPushButton:disabled {{ background: {t['surface']}; color: {_muted_text_color(t, t['surface'])}; }}"
         )
 
     def _add_style_btn_style(self):
         t = self._theme_colors
+        text = _contrast_text_color(t, t['bg'])
         return (
-            f"QPushButton {{ background: transparent; color: {t['accent']};"
+            f"QPushButton {{ background: transparent; color: {text};"
             f" border: 1px dashed {t['accent']}; border-radius: 6px;"
             f" font-size: 12px; font-weight: 500; }}"
             f"QPushButton:hover {{ background: {rgba(t['accent'], 26)}; }}"

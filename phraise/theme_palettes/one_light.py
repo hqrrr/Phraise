@@ -21,15 +21,16 @@ colors = {
     "text": "#383a42",
     "text_muted": "#696c77",
     "text_dim": "#a0a1a7",
-    "accent": "#4078f2",
-    "accent_hover": "#0184bc",
-    "red": "#e45649",
+    "accent": "#2563eb",
+    "accent_hover": "#016a9e",
+    "red": "#d32f2f",
     "red_hover": "#ca1243",
     "orange": "#d19a66",
     "green": "#50a14f",
     "yellow": "#c18401",
     "white": "#ffffff",
     "grip": "#c2c2c3",
+    "ball_border": "#383a42",
 }
 
 theme: FullTheme = {"colors": colors, "sizing": DEFAULT_SIZING}

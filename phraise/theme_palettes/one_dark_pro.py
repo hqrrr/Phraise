@@ -22,7 +22,7 @@ colors = {
     "text_muted": "#828997",
     "text_dim": "#5c6370",
     "accent": "#61afef",
-    "accent_hover": "#528bcc",
+    "accent_hover": "#6aa3e0",
     "red": "#e06c75",
     "red_hover": "#be5046",
     "orange": "#d19a66",
@@ -30,6 +30,7 @@ colors = {
     "yellow": "#e5c07b",
     "white": "#ffffff",
     "grip": "#4b5363",
+    "ball_border": "#1b1f23",
 }
 
 theme: FullTheme = {"colors": colors, "sizing": DEFAULT_SIZING}

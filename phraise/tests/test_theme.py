@@ -55,8 +55,8 @@ class TestThemeKeyContract(unittest.TestCase):
 
     def test_mandatory_color_keys_length(self):
         self.assertEqual(
-            len(MANDATORY_COLOR_KEYS), 17,
-            "MANDATORY_COLOR_KEYS should have exactly 17 entries",
+            len(MANDATORY_COLOR_KEYS), 18,
+            "MANDATORY_COLOR_KEYS should have exactly 18 entries",
         )
 
     def test_default_theme_has_all_mandatory_keys(self):

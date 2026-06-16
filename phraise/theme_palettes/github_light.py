@@ -30,6 +30,7 @@ colors = {
     "yellow": "#9a6700",
     "white": "#ffffff",
     "grip": "#afb8c1",
+    "ball_border": "#24292f",
 }
 
 theme: FullTheme = {"colors": colors, "sizing": DEFAULT_SIZING}

@@ -7,10 +7,8 @@
 from collections.abc import Callable
 from pathlib import Path
 
-import qtawesome as qta
-
 from PySide6.QtCore import Qt, QPoint, QRect, QTimer
-from PySide6.QtGui import QPainter, QColor, QFont, QPen, QRegion, QPixmap
+from PySide6.QtGui import QPainter, QColor, QPen, QRegion, QPixmap
 from PySide6.QtWidgets import QApplication, QWidget
 
 from .config import config
@@ -75,9 +73,9 @@ class FloatingBall(QWidget):
 
         size = self.width()
         margin = 2
-        accent_color = QColor(self._theme_colors["accent"])
 
-        p.setPen(QPen(accent_color.lighter(120), 2))
+        border_color = QColor(self._theme_colors["ball_border"])
+        p.setPen(QPen(border_color, 2))
         p.setBrush(QColor(self._theme_colors["bg"]))
         p.drawEllipse(margin, margin, size - 2 * margin, size - 2 * margin)
 
@@ -87,19 +85,6 @@ class FloatingBall(QWidget):
             y = (size - icon_size) // 2
             scaled = self._icon.scaled(icon_size, icon_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             p.drawPixmap(x, y, scaled)
-        else:
-            center = size // 2
-            text_size = max(10, size // 4)
-            font = QFont("Segoe UI", text_size, QFont.Bold)
-            font.setStyleHint(QFont.SansSerif)
-            p.setFont(font)
-            p.setPen(QColor(self._theme_colors["text"]))
-            p.drawText(QRect(0, 0, size, size - 2), Qt.AlignCenter, "AI")
-            pencil_size = max(12, int(size * 0.3))
-            pencil_pm = qta.icon("fa5s.pencil-alt", color=accent_color).pixmap(pencil_size, pencil_size)
-            px = (size - pencil_size) // 2
-            py = center + text_size // 2
-            p.drawPixmap(px, py, pencil_pm)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:

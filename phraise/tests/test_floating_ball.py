@@ -110,14 +110,12 @@ class TestFloatingBallThemeColors(unittest.TestCase):
 
     def test_paint_event_references_theme_keys(self) -> None:
         """The paintEvent method body must reference theme colour keys
-        ('accent', 'bg', 'text') rather than raw hex values."""
+        ('ball_border', 'bg') rather than raw hex values."""
         paint_body = _extract_paint_event_body(_SOURCE_TEXT)
-        self.assertIn("accent", paint_body.lower(),
-                      "paintEvent does not reference 'accent' theme key")
+        self.assertIn("ball_border", paint_body.lower(),
+                      "paintEvent does not reference 'ball_border' theme key")
         self.assertIn("bg", paint_body.lower(),
                       "paintEvent does not reference 'bg' theme key")
-        self.assertIn("text", paint_body.lower(),
-                      "paintEvent does not reference 'text' theme key")
 
 
 def _extract_paint_event_body(source: str) -> str:
@@ -191,25 +189,15 @@ class TestFloatingBallIconFallback(unittest.TestCase):
         self.assertTrue(ICON_PATH.exists(),
                         f"Icon file missing: {ICON_PATH}")
 
-    def test_ai_fallback_only_when_icon_missing(self) -> None:
-        """"AI" fallback text appears inside an ``else`` branch of the icon check.
-        The source must contain ``\"AI\"`` inside the ``else`` block of
-        ``if self._icon`` (or ``if ICON_PATH.exists()``), meaning it is only
-        used when no icon pixmap is available."""
-        # Locate the "AI" string literal in source.
-        index = _SOURCE_TEXT.find('"AI"')
-        self.assertNotEqual(index, -1,
-                            '"AI" fallback text not found in floating_ball.py')
-        # The "AI" literal must appear AFTER ``_icon`` is mentioned
-        # (i.e. inside the else / fallback branch).
-        icon_var_pos = _SOURCE_TEXT.find("self._icon")
-        self.assertGreater(index, icon_var_pos,
-                           '"AI" text must appear after self._icon reference '
-                           '(in the else/fallback branch)')
-        # Confirm it is inside an ``else`` block by checking the context.
-        prefix = _SOURCE_TEXT[max(0, index - 500):index]
-        self.assertIn("else:", prefix,
-                      '"AI" text does not appear to be inside an else block')
+    def test_no_ai_fallback_text(self) -> None:
+        """The 'AI' fallback text and pencil icon have been removed;
+        the logo files are the only rendering path."""
+        self.assertNotIn('"AI"', _SOURCE_TEXT,
+                         '"AI" fallback text should have been removed')
+        self.assertNotIn("pencil", _SOURCE_TEXT.lower(),
+                         "pencil icon fallback should have been removed")
+        self.assertNotIn("qtawesome", _SOURCE_TEXT,
+                         "qtawesome import should have been removed")
 
 
 class TestFloatingBallSignal(unittest.TestCase):

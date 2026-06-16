@@ -12,6 +12,8 @@ No other module should contain hardcoded hex color values.
 
 from typing import TypedDict
 
+import math
+
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QApplication
 
@@ -24,6 +26,7 @@ MANDATORY_COLOR_KEYS: list[str] = [
     "surface",       # Elevated surface background for cards and controls
     "surface_hover", # Hover state background for interactive surfaces
     "border",        # Default border color for frames and inputs
+    "ball_border",   # Border color for the floating ball
     "text",          # Primary text color
     "text_muted",    # Secondary/muted text color
     "text_dim",      # Tertiary/disabled text color
@@ -190,7 +193,7 @@ THEME_COLORS: dict[str, str] = {
     "text_muted": "#a6adc8",
     "text_dim": "#6c7086",
     "accent": "#6c5ce7",
-    "accent_hover": "#7c6cf7",
+    "accent_hover": "#9b8fff",
     "red": "#f38ba8",
     "red_hover": "#f06292",
     "orange": "#fab387",
@@ -198,6 +201,7 @@ THEME_COLORS: dict[str, str] = {
     "yellow": "#f9e2af",
     "white": "#ffffff",
     "grip": "#585b70",
+    "ball_border": "#11111b",
 }
 
 DEFAULT_THEME = THEME_COLORS
@@ -272,6 +276,53 @@ def _resolve_color(theme: dict, value: str) -> str:
     return theme.get(value, value)
 
 
+def _relative_luminance(hex_color: str) -> float:
+    """Return the WCAG relative luminance of a ``#RRGGBB`` colour."""
+    h = hex_color.lstrip("#")
+    r = int(h[0:2], 16) / 255.0
+    g = int(h[2:4], 16) / 255.0
+    b = int(h[4:6], 16) / 255.0
+
+    def _channel(c: float) -> float:
+        if c <= 0.03928:
+            return c / 12.92
+        return math.pow((c + 0.055) / 1.055, 2.4)
+
+    return 0.2126 * _channel(r) + 0.7152 * _channel(g) + 0.0722 * _channel(b)
+
+
+def _contrast_ratio(fg_hex: str, bg_hex: str) -> float:
+    """Return the WCAG contrast ratio between two ``#RRGGBB`` colours."""
+    l1 = _relative_luminance(fg_hex)
+    l2 = _relative_luminance(bg_hex)
+    lighter = max(l1, l2)
+    darker = min(l1, l2)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def _contrast_text_color(theme: dict, bg_hex: str) -> str:
+    """Return the theme colour that contrasts *bg_hex* most strongly.
+
+    Candidates are the theme's ``white``, ``text``, ``bg``, and ``bg_darker``
+    colours.  This guarantees a readable label even on mid-tone accents where
+    ``white`` and ``text`` alone would both be too low-contrast.
+    """
+    candidates = [theme["white"], theme["text"], theme["bg"], theme["bg_darker"]]
+    return max(candidates, key=lambda c: _contrast_ratio(c, bg_hex))
+
+
+def _muted_text_color(theme: dict, bg_hex: str) -> str:
+    """Return a muted text colour for *bg_hex* that is still readable.
+
+    Prefers ``text_muted`` when it already meets WCAG AA for normal text.
+    Otherwise falls back to whichever of ``white`` or ``text`` contrasts best.
+    """
+    muted_ratio = _contrast_ratio(theme["text_muted"], bg_hex)
+    if muted_ratio >= 4.5:
+        return theme["text_muted"]
+    return _contrast_text_color(theme, bg_hex)
+
+
 def rgba(hex_color: str, alpha: int) -> str:
     """Convert a hex colour to an ``rgba(r, g, b, a)`` string.
 
@@ -307,12 +358,13 @@ def btn_style(theme: dict, hover_color: str | None = None,
     """
     s = sizing if sizing is not None else DEFAULT_SIZING
     hc = _resolve_color(theme, hover_color) if hover_color else theme["surface_hover"]
+    hover_text = _contrast_text_color(theme, hc)
     return (
         f"QPushButton {{ background: transparent; color: {theme['text_muted']}; "
         f"border: none; font-size: {_px(s['font_size_md'])}; "
         f"padding: {_px(s['padding_btn_v'])} {_px(s['padding_btn_h'])}; "
         f"border-radius: {_px(s['radius_sm'])}; }}"
-        f"QPushButton:hover {{ background: {hc}; color: {theme['text']}; }}"
+        f"QPushButton:hover {{ background: {hc}; color: {hover_text}; }}"
     )
 
 
@@ -321,12 +373,13 @@ def action_btn_style(theme: dict, bg: str,
     """Small action button with a solid background.
 
     *bg* may be a raw hex or a theme key.  Hover is always the accent-hover
-    colour.
+    colour.  Text colour is chosen automatically for best contrast.
     """
     s = sizing if sizing is not None else DEFAULT_SIZING
     bg_color = _resolve_color(theme, bg)
+    text_color = _contrast_text_color(theme, bg_color)
     return (
-        f"QPushButton {{ background: {bg_color}; color: {theme['text']}; "
+        f"QPushButton {{ background: {bg_color}; color: {text_color}; "
         f"border: none; border-radius: {_px(s['radius_md'])}; "
         f"font-size: {_px(s['font_size_sm'])}; "
         f"font-weight: {s['font_weight_medium']}; "
@@ -340,7 +393,7 @@ def style_btn_style(theme: dict, active: bool,
     """Style-selector toggle button."""
     s = sizing if sizing is not None else DEFAULT_SIZING
     bg = theme["accent"] if active else theme["surface"]
-    color = theme["white"] if active else theme["text_muted"]
+    color = _contrast_text_color(theme, bg) if active else _muted_text_color(theme, bg)
     return (
         f"QPushButton {{ background: {bg}; color: {color}; border: none; "
         f"border-radius: {_px(s['radius_md'])}; "
@@ -348,7 +401,7 @@ def style_btn_style(theme: dict, active: bool,
         f"font-weight: {s['font_weight_medium']}; "
         f"padding: {_px(s['padding_style_btn_v'])} {_px(s['padding_style_btn_h'])}; }}"
         f"QPushButton:hover {{ background: {theme['accent_hover']}; "
-        f"color: {theme['white']}; }}"
+        f"color: {_contrast_text_color(theme, theme['accent_hover'])}; }}"
     )
 
 
