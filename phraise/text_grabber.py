@@ -15,20 +15,13 @@ from .error_log import write_error
 
 
 def _ensure_com_initialized():
-    """Initialize COM MTA on the current thread if not already initialized.
-
-    On non-Windows platforms this is a no-op.  On Windows, UIA operations
-    require a COM apartment — calling this before any UIA call ensures one
-    exists without double-initializing or changing an already-established
-    apartment model.
-    """
     if sys.platform != "win32":
         return
     try:
         import pythoncom
-        pythoncom.CoInitializeEx(pythoncom.COINIT_MULTITHREADED)
+        pythoncom.CoInitializeEx(pythoncom.COINIT_APARTMENTTHREADED)
     except Exception:
-        pass  # Already initialized or incompatible apartment model
+        pass
 
 
 class TextGrabber:

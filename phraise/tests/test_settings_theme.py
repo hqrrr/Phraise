@@ -134,8 +134,6 @@ class TestThemeSaveDeduplication(unittest.TestCase):
         self._panel._style_entries = []
         self._panel._custom_css_editor = MagicMock()
         self._panel._custom_css_editor.toPlainText.return_value = ""
-        self._panel._startup_cb = MagicMock()
-        self._panel._startup_cb.isChecked.return_value = False
         self._panel._start_min_cb = MagicMock()
         self._panel._start_min_cb.isChecked.return_value = False
         self._panel._auto_close_cb = MagicMock()

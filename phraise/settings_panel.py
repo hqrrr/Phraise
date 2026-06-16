@@ -904,14 +904,6 @@ class SettingsPanel(QDialog):
         theme_layout.addStretch()
         layout.addWidget(theme_row)
 
-        self._startup_cb = QCheckBox(t("settings.checkbox.auto_start"))
-        self._startup_cb.setChecked(general_cfg.get("start_with_windows", False))
-        self._startup_cb.setStyleSheet(label_style(self._theme_colors, "text"))
-        layout.addWidget(self._startup_cb)
-        rl_setup = QLabel(t("settings.restart_required"))
-        rl_setup.setStyleSheet(label_style(self._theme_colors, "yellow", "font-size: 12px; padding-left: 4px;"))
-        layout.addWidget(rl_setup)
-
         self._start_min_cb = QCheckBox(t("settings.checkbox.start_minimized"))
         self._start_min_cb.setChecked(general_cfg.get("start_minimized", False))
         self._start_min_cb.setStyleSheet(label_style(self._theme_colors, "text"))
@@ -1084,7 +1076,6 @@ class SettingsPanel(QDialog):
         data["trigger"].pop("hotkey_translate", None)
         data["trigger"]["hotkey_toggle_ball"] = self._hk_toggle.text()
 
-        data["general"]["start_with_windows"] = self._startup_cb.isChecked()
         data["general"]["start_minimized"] = self._start_min_cb.isChecked()
         data["general"]["replace_auto_close"] = self._auto_close_cb.isChecked()
 
@@ -1178,7 +1169,6 @@ class SettingsPanel(QDialog):
             self._hk_toggle_status.setText("")
 
         # Checkboxes
-        self._startup_cb.setStyleSheet(label_style(t, "text"))
         self._start_min_cb.setStyleSheet(label_style(t, "text"))
         self._auto_close_cb.setStyleSheet(label_style(t, "text"))
 

@@ -153,17 +153,10 @@ class PhrAIseApp:
 
     def _hotkey_trigger(self):
         try:
-            import pythoncom
-            pythoncom.CoInitializeEx(pythoncom.COINIT_MULTITHREADED)
             selected = self._grabber.get_selected_text()
             run_on_main(lambda: self._on_trigger_dispatch(selected))
         except Exception as e:
             write_error(e, "_hotkey_trigger")
-        finally:
-            try:
-                pythoncom.CoUninitialize()
-            except NameError:
-                pass
 
     def _on_trigger_dispatch(self, selected: str):
         self._grabber.capture_foreground()
@@ -240,16 +233,23 @@ def main():
     # Rotate error.log on startup: keep today's log, truncate older ones.
     rotate_log()
 
-    # Initialize COM MTA on the main Qt thread so UIA operations
-    # (capture_foreground, focus_foreground, replace_text) work when
-    # dispatched to the main thread via run_on_main().
-    import sys as _sys
-    if _sys.platform == "win32":
+    if sys.platform == "win32":
+        import ctypes
+        _mutex = ctypes.windll.kernel32.CreateMutexW(None, False, "PhrAIse_SingleInstance_Mutex")
+        if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+            ctypes.windll.user32.MessageBoxW(
+                0,
+                "PhrAIse is already running.",
+                "PhrAIse",
+                0x00000030,  # MB_ICONWARNING
+            )
+            return
+
         try:
             import pythoncom
-            pythoncom.CoInitializeEx(pythoncom.COINIT_MULTITHREADED)
+            pythoncom.CoInitializeEx(pythoncom.COINIT_APARTMENTTHREADED)
         except pythoncom.error:
-            pass  # Already initialized or incompatible model — continue
+            pass
 
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)

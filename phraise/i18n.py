@@ -446,10 +446,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Dark (Catppuccin Mocha)",
         "zh-CN": "暗色 (Catppuccin Mocha)",
     },
-    "settings.checkbox.auto_start": {
-        "en": "Start with Windows",
-        "zh-CN": "开机自启",
-    },
     "settings.checkbox.start_minimized": {
         "en": "Start minimized",
         "zh-CN": "启动时最小化",

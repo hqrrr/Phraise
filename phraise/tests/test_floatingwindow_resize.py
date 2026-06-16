@@ -165,6 +165,65 @@ class TestFloatingWindowResizeFromChildren(unittest.TestCase):
             win.close()
             win.deleteLater()
 
+    def test_combo_box_edge_click_not_consumed(self):
+        """Click on source-lang combo near window's right edge must NOT start resize."""
+        win = self._make_window()
+        win.show()
+        try:
+            combo = win._source_lang
+            self.assertIsNotNone(combo)
+
+            # Compute a position on the combo box that falls within the
+            # window's right-edge resize margin (in window coordinates).
+            combo_tl = combo.mapTo(win, QPoint(0, 0))
+            center_y = combo_tl.y() + combo.height() // 2
+            window_local = QPoint(win.width() - 2, center_y)
+            global_pos = win.mapToGlobal(window_local)
+            combo_local = combo.mapFromGlobal(global_pos)
+
+            # Sanity: the window-local X is within the east resize margin.
+            computed_window_local = combo.mapTo(win, combo_local)
+            self.assertGreaterEqual(
+                computed_window_local.x(), win.width() - win._resize_margin
+            )
+
+            press = self._mouse_event(
+                QEvent.MouseButtonPress, combo_local, global_pos
+            )
+            handled = win.eventFilter(combo, press)
+
+            self.assertFalse(handled, "combo edge click should NOT be consumed")
+            self.assertFalse(win._resizing, "resize should NOT start")
+        finally:
+            win.close()
+            win.deleteLater()
+
+    def test_combo_box_mouse_move_near_edge_no_resize(self):
+        """Mouse move on combo near window's right edge must NOT be consumed."""
+        win = self._make_window()
+        win.show()
+        try:
+            combo = win._source_lang
+            self.assertFalse(win._resizing)
+
+            # Same position computation as above.
+            combo_tl = combo.mapTo(win, QPoint(0, 0))
+            center_y = combo_tl.y() + combo.height() // 2
+            window_local = QPoint(win.width() - 2, center_y)
+            global_pos = win.mapToGlobal(window_local)
+            combo_local = combo.mapFromGlobal(global_pos)
+
+            move = self._mouse_event(
+                QEvent.MouseMove, combo_local, global_pos
+            )
+            handled = win.eventFilter(combo, move)
+
+            self.assertFalse(handled, "combo edge mouse move should NOT be consumed")
+            self.assertFalse(win._resizing, "resizing should remain False")
+        finally:
+            win.close()
+            win.deleteLater()
+
 
 if __name__ == "__main__":
     unittest.main()

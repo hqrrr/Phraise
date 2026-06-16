@@ -95,7 +95,6 @@ def _build_mock_dialog(
 
     # General / theme
     dialog._theme_combo = _make_combo("dark")
-    dialog._startup_cb = MagicMock(**{"isChecked.return_value": False})
     dialog._start_min_cb = MagicMock(**{"isChecked.return_value": False})
     dialog._auto_close_cb = MagicMock(**{"isChecked.return_value": False})
 
@@ -159,7 +158,6 @@ class TestSettingsPreserve(unittest.TestCase):
                 "language": "en",
                 "optimize_model": "model_1",
                 "translate_model": "model_2",
-                "start_with_windows": False,
                 "start_minimized": False,
                 "replace_auto_close": False,
             },

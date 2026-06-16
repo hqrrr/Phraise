@@ -86,7 +86,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "general": {
         "language": "en",
-        "start_with_windows": False,
         "start_minimized": False,
         "replace_auto_close": False,
         "theme": "dark",

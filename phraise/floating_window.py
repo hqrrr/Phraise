@@ -38,6 +38,9 @@ from PySide6.QtWidgets import (
 )
 
 
+_INTERACTIVE_TYPES = (QComboBox, QPushButton, QCheckBox, QTextEdit)
+
+
 class NoScrollComboBox(QComboBox):
     """QComboBox that blocks scroll wheel when the dropdown popup is closed."""
     def __init__(self, parent=None):
@@ -734,12 +737,24 @@ class FloatingWindow(QWidget):
             edge += "n"
         return edge if edge else ""
 
+    def _has_interactive_ancestor(self, child: QWidget, root: QWidget) -> bool:
+        """Return True if *child* has any ancestor (up to but not including *root*)
+        that is an instance of *INTERACTIVE_TYPES*."""
+        parent = child.parent()
+        while parent and parent is not root:
+            if isinstance(parent, _INTERACTIVE_TYPES):
+                return True
+            parent = parent.parent()
+        return False
+
     def _install_resize_event_filter(self, widget: QWidget | None = None):
         if widget is None:
             widget = self
         widget.installEventFilter(self)
         widget.setMouseTracking(True)
         for child in widget.findChildren(QWidget):
+            if isinstance(child, _INTERACTIVE_TYPES) or self._has_interactive_ancestor(child, widget):
+                continue
             child.installEventFilter(self)
             child.setMouseTracking(True)
 
@@ -747,6 +762,8 @@ class FloatingWindow(QWidget):
         if watched is self:
             return False
         if not isinstance(watched, QWidget):
+            return False
+        if isinstance(watched, _INTERACTIVE_TYPES) or self._has_interactive_ancestor(watched, self):
             return False
         if event.type() not in (QEvent.MouseMove, QEvent.MouseButtonPress, QEvent.MouseButtonRelease):
             return False
