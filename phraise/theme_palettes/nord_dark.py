@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Color palette definitions for the Nord Dark theme.
 """Nord dark theme palette.
 
 Source: Arctic Ice Studio's Nord colour palette

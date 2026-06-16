@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Main floating window UI for optimize and translate results.
 from .config import config
 from .dispatch import run_on_main
 from .error_log import write_error

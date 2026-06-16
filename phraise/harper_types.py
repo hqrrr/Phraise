@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Type definitions for Harper diagnostics and corrections.
 """Pure-Python LSP dataclasses and JSON-RPC message builders/parsers.
 
 All types are based on the REAL protocol captured from harper-ls v2.4.0

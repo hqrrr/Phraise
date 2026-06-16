@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for floatingwindow update.
 """Tests for FloatingWindow.update() rename (Task 14).
 
 ``def update(self)`` was renamed to ``def process_events(self)`` to stop

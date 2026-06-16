@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for flowlayout gc.
 """Tests for FlowLayout garbage-collection safety (Task 13).
 
 Verifies that removing ``FlowLayout.__del__`` prevents segfaults during

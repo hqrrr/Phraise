@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for harper parser.
 """RED-phase tests for ``HarperDiagnosticsParser``.
 
 The parser class does NOT exist yet — all tests in this file MUST fail

@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: LSP smoke test script for Harper integration.
 """
 smoke_test.py — Discovery spike for harper-ls LSP protocol.
 

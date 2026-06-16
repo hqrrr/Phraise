@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Draggable always-on-top floating ball widget.
 from collections.abc import Callable
 from pathlib import Path
 

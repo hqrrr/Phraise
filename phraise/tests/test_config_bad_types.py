@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for config bad types.
 """Integration tests: malformed settings.json does not crash downstream.
 
 Writes a corrupted settings.json, loads it via Config, and verifies

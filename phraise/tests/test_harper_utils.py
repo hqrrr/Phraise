@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for harper utils.
 """Unit tests for ``phraise.harper_utils``.
 
 Covers path resolution in dev mode, frozen (PyInstaller) mode, and the

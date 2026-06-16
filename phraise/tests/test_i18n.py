@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for i18n.
 """Translation integrity tests for the i18n module.
 
 These tests verify that every translation key is complete, that non-brand

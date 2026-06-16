@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for harper empty diagnostics.
 """Regression test: empty diagnostics from Harper LSP server.
 
 ``HarperLspManager._decode_frames`` currently guards emission of

@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for floatingwindow init.
 """Regression test: FloatingWindow.__init__ must call _setup_window / _build_ui.
 
 The current ``__init__`` (line ~240) sets basic attributes but does **not**

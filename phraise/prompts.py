@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: LLM prompt templates for optimize, translate, and custom actions.
 SYSTEM_PROMPT_OPTIMIZE = """You are a professional writing assistant. You will receive original text and a user-selected style. Provide three different rewrite versions in that style. You MUST return JSON strictly.
 
 IMPORTANT: Preserve the original language. NEVER translate to another language."""

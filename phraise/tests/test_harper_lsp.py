@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for harper lsp.
 """TDD tests for HarperLspManager — QProcess-based LSP lifecycle manager.
 
 These tests import from ``phraise.harper_lsp_manager``, which does NOT yet

@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for config validation.
 """Unit tests for Config._validate() type checking.
 
 These test the validation logic in isolation: set bad values on

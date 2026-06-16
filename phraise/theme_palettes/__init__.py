@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Color palette definitions for the   Init   theme.
 """PhrAIse theme palette registry.
 
 Each submodule exports a ``theme`` dict with ``"colors"`` and ``"sizing"``

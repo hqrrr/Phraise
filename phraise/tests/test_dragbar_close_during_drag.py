@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for dragbar close during drag.
 """TDD tests for FloatingWindow._close() mouse grab release during drag.
 
 When the FloatingWindow is closed (Esc key, close button, programmatic _close())

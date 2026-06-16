@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for dragbar grab release.
 """TDD tests for _DragBar.hideEvent() mouse grab release guarantee.
 
 When _DragBar is hidden during an active drag operation (e.g., FloatingWindow

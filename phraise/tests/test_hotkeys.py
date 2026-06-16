@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for hotkeys.
 """TDD tests for hotkey double-tap parsing, validation, and state machine.
 
 These tests import from phraise.hotkeys, which does not yet have the

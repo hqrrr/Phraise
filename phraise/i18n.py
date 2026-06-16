@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Internationalization and translation utilities.
 """Centralized i18n (internationalization) module for PhrAIse.
 
 All user-facing strings are defined here in English and Simplified Chinese.

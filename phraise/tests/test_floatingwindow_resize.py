@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for floatingwindow resize.
 """Regression tests for FloatingWindow resize behaviour.
 
 The frameless window's resize margins are covered by child widgets

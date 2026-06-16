@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Thread-safe dispatcher to the main Qt thread.
 from PySide6.QtCore import QObject, Signal
 
 

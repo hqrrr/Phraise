@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for floating ball.
 """RED-phase tests for FloatingBall theme wiring.
 
 These tests verify the expected contract for theme-aware FloatingBall

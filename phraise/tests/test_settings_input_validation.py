@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for settings input validation.
 """Tests for settings_panel _on_save numeric input validation.
 
 Verifies that int() and float() casts in _on_save are wrapped in

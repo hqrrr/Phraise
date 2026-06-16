@@ -104,7 +104,7 @@ If you just want to run PhrAIse without installing Python, download the latest r
 
 ```bash
 pip install -r phraise/requirements.txt
-python -m phraise.main
+python run.py
 ```
 
 On first launch, right-click the tray icon or floating ball -> **Settings** -> configure at least one model with your API key, or set **Optimize** to **Harper** to use the local grammar engine.

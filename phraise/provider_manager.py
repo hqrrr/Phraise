@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: LLM provider and model list management.
 """Dynamic provider list management.
 
 Fetches the latest OpenAI-compatible provider list from models.dev and falls

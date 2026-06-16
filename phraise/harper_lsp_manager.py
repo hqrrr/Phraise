@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Harper LSP subprocess manager.
 """HarperLspManager — QProcess-based LSP lifecycle manager for harper-ls.
 
 Launches and manages the ``harper-ls`` binary as a QProcess subprocess,

@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for settings async guard.
 """Tests for async thread use-after-free guards in SettingsPanel (Task 21).
 
 Verifies that ``_on_test_done`` and ``_on_fetch_done`` return safely when

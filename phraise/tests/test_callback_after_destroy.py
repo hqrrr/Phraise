@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for callback after destroy.
 """Tests for stale callback guards — prevent crash on destroyed window (Task 12).
 
 Verifies that ``_on_optimize_done``, ``_on_translate_done``, ``_on_custom_done``,

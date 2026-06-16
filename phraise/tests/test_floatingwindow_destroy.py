@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for floatingwindow destroy.
 """Tests for FloatingWindow.cleanup() (Task 13).
 
 Verifies that the renamed ``cleanup()`` method:

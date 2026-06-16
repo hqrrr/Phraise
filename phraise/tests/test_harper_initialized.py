@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for harper initialized.
 """Unit tests for ``build_initialized_notification`` wiring in HarperLspManager.
 
 Verifies the Task 8 startup flow: ``initialize()`` sends only the initialize

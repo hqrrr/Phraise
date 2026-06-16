@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Theme loading, resolution, and stylesheet generation.
 """Centralized CSS theme system for PhrAIse.
 
 All color constants, style generators, and the Theme class live here.

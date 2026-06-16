@@ -1,3 +1,10 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: PyInstaller build script for packaging PhrAIse into a standalone executable.
+
 import os
 import sys
 import urllib.request
@@ -47,13 +54,16 @@ def _ensure_harper_binary():
 def build():
     _ensure_harper_binary()
 
-    entry = str(ROOT / "phraise" / "main.py")
+    entry = str(ROOT / "run.py")
     dist = str(ROOT / "dist")
     work = str(ROOT / "build")
 
+    sys.path.insert(0, str(ROOT))
+    from phraise.__version__ import VERSION
+
     build_cmd = [
         sys.executable, "-m", "PyInstaller",
-        "--name=PhrAIse",
+        f"--name=PhrAIse{VERSION}",
         "--onefile",
         "--windowed",
         "--noconsole",

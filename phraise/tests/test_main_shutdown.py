@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for main shutdown.
 """Tests that HarperClient.shutdown_all is called exactly once during app shutdown.
 
 Task 28: The duplicate ``HarperClient.shutdown_all()`` call has been removed

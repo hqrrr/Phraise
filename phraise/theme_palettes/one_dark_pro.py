@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Color palette definitions for the One Dark Pro theme.
 """One Dark Pro dark theme palette.
 
 Source: Atom / VS Code One Dark Pro theme

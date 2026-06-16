@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Main application class and lifecycle management.
 import sys
 
 from PySide6.QtCore import Qt, QTimer
@@ -7,7 +13,7 @@ from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
 from .config import config
 from .i18n import t, add_listener, remove_listener
 from .dispatch import run_on_main
-from .error_log import write_error
+from .error_log import rotate_log, write_error
 from .floating_ball import FloatingBall
 from .floating_window import FloatingWindow
 from .hotkeys import hotkey_manager
@@ -230,6 +236,9 @@ class PhrAIseApp:
 def main():
     import multiprocessing
     multiprocessing.freeze_support()
+
+    # Rotate error.log on startup: keep today's log, truncate older ones.
+    rotate_log()
 
     # Initialize COM MTA on the main Qt thread so UIA operations
     # (capture_foreground, focus_foreground, replace_text) work when

@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for harper lsp integration.
 """Integration test for HarperLspManager with real harper-ls binary.
 
 Uses the actual ``harper-ls.exe`` binary to verify end-to-end stdout

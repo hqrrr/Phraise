@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for toast lifecycle.
 """Tests for toast lifecycle — prevent double-delete crash (Task 12).
 
 Verifies:

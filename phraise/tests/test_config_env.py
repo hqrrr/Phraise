@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for config env.
 """Test that phraise.config handles missing APPDATA env var without KeyError.
 
 ``config.py`` imports from ``error_log`` and shares the same ``_APPDATA``

@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: LSP end-to-end test script for Harper integration.
 """End-to-end smoke test using the REAL harper-ls.exe binary.
 
 Spawns harper-ls via subprocess, exercises the full LSP lifecycle

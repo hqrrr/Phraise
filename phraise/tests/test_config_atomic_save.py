@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for config atomic save.
 """Tests for Config.save() atomic write safety.
 
 Verifies that save() writes to a temp file then uses os.replace()

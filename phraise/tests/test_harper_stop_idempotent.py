@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for harper stop idempotent.
 """Tests that HarperLspManager.stop() is idempotent.
 
 Calling ``stop()`` twice must not raise ``RuntimeError`` from duplicate

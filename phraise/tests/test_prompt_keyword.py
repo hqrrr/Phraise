@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for prompt keyword.
 """Tests that prompt_keyword from style config is wired into optimize_text prompts.
 
 Verifies:

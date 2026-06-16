@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for settings preserve.
 """Tests for SettingsPanel._on_save preserving existing API keys and styles.
 
 The user reported that ``settings.json`` is overwritten without API key and

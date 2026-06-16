@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for com apartment.
 """Tests for COM apartment initialization — STA → MTA fix for UIA compatibility.
 
 These tests verify that COM is initialized with COINIT_MULTITHREADED

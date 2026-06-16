@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for safe format.
 """TDD validation for _safe_format(): does it correctly preserve user text with
 curly braces through Python .format() templating, or corrupt it?
 

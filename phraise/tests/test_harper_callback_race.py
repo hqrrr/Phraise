@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for harper callback race.
 """Tests for HarperClient callback race condition and disambiguation (Task 10).
 
 Verifies:

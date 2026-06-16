@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for harper integration.
 """TDD tests for Harper integration in ``FloatingWindow._do_optimize()``.
 
 These tests verify that ``_do_optimize()`` correctly branches between Harper

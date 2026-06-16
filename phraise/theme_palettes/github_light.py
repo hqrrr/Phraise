@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Color palette definitions for the GitHub Light theme.
 """GitHub Light theme palette.
 
 Source: GitHub Primer design system

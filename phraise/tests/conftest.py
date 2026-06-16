@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: pytest fixtures and shared test configuration.
 """Shared PySide6 QApplication fixture for all tests.
 
 Provides a lazily-initialized QApplication singleton via the ``qapp``

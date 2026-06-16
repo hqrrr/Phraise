@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for harper malformed diag.
 """Tests: ``HarperDiagnosticsParser.parse_publish_diagnostics`` handles
 malformed diagnostic JSON without crashing.
 

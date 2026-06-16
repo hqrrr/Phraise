@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for floating window no model.
 """Tests for FloatingWindow no-model guards in _do_optimize and _do_translate.
 
 Verifies that:

@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for error log env.
 """Test that phraise.error_log handles missing APPDATA env var without KeyError.
 
 When `os.environ` lacks the ``APPDATA`` key (common in sandboxed / CI

@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for clipboard restore.
 """Tests for clipboard save/restore with empty clipboard handling.
 
 Verifies that _clipboard_saved boolean flag is used instead of

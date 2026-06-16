@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for harper stdout reader.
 """Tests for HarperLspManager stdout reader — Content-Length frame decoding.
 
 Verifies that ``_on_stdout_ready()`` correctly parses LSP frames from

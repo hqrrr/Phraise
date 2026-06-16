@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for uia via hotkey.
 """Tests for UIA operations working correctly on MTA COM threads.
 
 Verifies that text grab UIA operations succeed when the calling thread

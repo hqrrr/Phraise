@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for floatingwindow harper issues.
 """Regression test: ``_populate_grammar_issues`` accepts ``HarperIssue`` dataclasses.
 
 The production code at ``floating_window.py:728`` originally called

@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for main init resilience.
 """Tests for main.py init resilience — individual _init_* failures must not crash run().
 
 Task 28: Each ``_init_ball``, ``_init_tray``, ``_init_hotkeys`` call in

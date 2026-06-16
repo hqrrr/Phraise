@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Utility functions for Harper integration.
 """Utility functions for resolving the Harper LSP binary path.
 
 Supports both development (source) and frozen (PyInstaller) environments.

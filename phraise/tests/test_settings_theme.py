@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for settings theme.
 """Tests for theme combo selection fix and save deduplication (Task 19).
 
 Verifies:

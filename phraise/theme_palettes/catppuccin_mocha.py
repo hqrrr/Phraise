@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Color palette definitions for the Catppuccin Mocha theme.
 """Catppuccin Mocha dark theme palette.
 
 Source: https://catppuccin.com/palette (Mocha flavour)

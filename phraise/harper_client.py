@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Local Harper grammar engine client.
 """High-level Harper LSP client.
 
 Composes lower-level parsers, protocol helpers, and fix-applier utilities

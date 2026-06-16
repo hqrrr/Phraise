@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for harper multi line range.
 """Test multi-line range extraction in ``_extract_text_at_range``.
 
 Verifies that the helper correctly handles ranges spanning multiple lines

@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for settings empty defaults.
 """Tests for empty default model configuration and placeholder behavior.
 
 Verifies that:

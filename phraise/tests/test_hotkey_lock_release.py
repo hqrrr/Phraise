@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for hotkey lock release.
 """TDD tests for lock-held callback optimization in DoubleTapDetector.
 
 Verifies that self._lock is released before calling _callback() and

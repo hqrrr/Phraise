@@ -104,7 +104,7 @@
 
 ```bash
 pip install -r phraise/requirements.txt
-python -m phraise.main
+python run.py
 ```
 
 首次启动后，右键托盘图标或悬浮球 -> **设置** -> 至少为一个模型配置 API Key；或者将 **优化** 设置为 **Harper**，直接使用本地语法引擎。

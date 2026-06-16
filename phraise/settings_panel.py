@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Settings dialog UI for models, styles, triggers, and appearance.
 from .config import config
 from .i18n import t, SUPPORTED_LANGUAGES, set_language, get_language, add_listener, remove_listener
 from .provider_manager import get_providers, init_providers

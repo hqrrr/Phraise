@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for theme.
 """RED-phase tests for the theme key contract, registry, and style generator output.
 
 These tests assert the shape and behaviour of theme-related symbols.  They

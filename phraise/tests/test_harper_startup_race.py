@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for harper startup race.
 """Tests for Harper LSP startup race condition fix (Task 8).
 
 Verifies that ``initialize()`` and ``send_text()`` are deferred until

@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Color palette definitions for the Solarized Light theme.
 """Solarized Light theme palette.
 
 Source: Ethan Schoonover's Solarized colour scheme

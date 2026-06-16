@@ -1,3 +1,9 @@
+# PhrAIse - AI writing assistant
+# License: GNU GPLv3
+# GitHub: https://github.com/hqrrr/Phraise
+# Author: hqrrr
+#
+# Description: Unit tests for llm error handling.
 """Unit tests for LLM client error handling: check_output_fit, _handle_error, _call_api."""
 import time
 import unittest
