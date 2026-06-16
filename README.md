@@ -2,7 +2,7 @@
 
 <img src="phraise/assets/phraise_logo.svg" alt="PhrAIse Logo" width="100"/>
 
-[![License](https://img.shields.io/github/license/hqrrr/Phraise?color=888)](LICENSE)&nbsp;
+[![License](https://img.shields.io/badge/license-GPL--3.0-lightgray)](LICENSE)&nbsp;
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2B-4c8eda)](https://github.com/hqrrr/Phraise)&nbsp;
 [![Python](https://img.shields.io/badge/Python-3.11%2B-4c8eda)](https://python.org)&nbsp;
 [![Downloads](https://img.shields.io/github/downloads/hqrrr/Phraise/total?color=4c8eda)](https://github.com/hqrrr/Phraise/releases)
