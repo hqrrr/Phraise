@@ -18,16 +18,24 @@
 
 ## Quick Navigation
 
-- [Why PhrAIse?](#why-phraise)
-- [What It Does](#what-it-does)
-- [Getting Started](#getting-started)
-- [LLM Providers](#llm-providers)
-- [Coding Plan Compatibility](#coding-plan-compatibility)
-- [Configuration](#configuration)
-- [Hotkeys](#hotkeys)
-- [Build](#build)
-- [Project Structure](#project-structure)
-- [License & Cost](#license--cost)
+- [PhrAIse](#phraise)
+  - [Quick Navigation](#quick-navigation)
+  - [Why PhrAIse?](#why-phraise)
+  - [What It Does](#what-it-does)
+    - [Local Mode with Harper](#local-mode-with-harper)
+    - [LLM Mode - Optimize \& Translate](#llm-mode---optimize--translate)
+    - [Core System Features](#core-system-features)
+  - [LLM Providers](#llm-providers)
+  - [Configuration](#configuration)
+  - [Hotkeys](#hotkeys)
+  - [Getting Started](#getting-started)
+    - [Download Pre-built `.exe`](#download-pre-built-exe)
+    - [Run from Source](#run-from-source)
+      - [Requirements](#requirements)
+      - [Run](#run)
+  - [Build](#build)
+  - [Project Structure](#project-structure)
+  - [License \& Cost](#license--cost)
 
 ## Why PhrAIse?
 
@@ -45,17 +53,31 @@ PhrAIse has two interchangeable engines for the **Optimize** function:
 
 ### Local Mode with Harper
 
+*Simple and Fast*
+
 [**Harper**](https://github.com/Automattic/harper) is a local, offline grammar engine. No API key, no network request, no data leaves your machine. It catches spelling mistakes, repeated words, missing/extra spaces, wrong articles (`a`/`an`), unclosed quotes, apostrophe issues, and more.
 
 When Harper is assigned to Optimize, **PhrAIse** shows a single corrected version and a list of detected grammar issues. You can toggle individual fixes on or off before replacing the original text.
 
+**Demo Opmization (Harper mode)**
+
+![demo-optimize-harper-mode](demo/demo-optimize-harper-mode.gif)
+
 ### LLM Mode - Optimize & Translate
+
+*More Powerful*
 
 When you assign a configured LLM model to **Optimize** or **Translate**, **PhrAIse** uses your LLM provider:
 
 - **Optimize**: three rewrite versions per request with grammar checking, in any style you define (Concise, Formal, Natural, or custom)
 - **Translate**: translation with auto-detection, one-click replace
 - **Custom instructions**: free-form AI edits with extensible style presets
+
+**Demo Optimization (LLM mode)**
+![demo-optimize-LLM](demo/demo-optimize-LLM.gif)
+
+**Demo Translation (LLM mode)**
+![demo-translate-LLM](demo/demo-translate-LLM.gif)
 
 ### Core System Features
 
@@ -92,6 +114,8 @@ All hotkeys are configurable in **Settings**.
 
 If you just want to run PhrAIse without installing Python, download the latest release from the [GitHub Releases](https://github.com/hqrrr/Phraise/releases) page and run `PhrAIse.exe` directly.
 
+> 👉 On first launch, right-click the tray icon or floating ball -> **Settings** -> configure at least one model with your API key, or set **Optimize** to **Harper** to use the local grammar engine.
+
 ### Run from Source
 
 #### Requirements
@@ -108,7 +132,7 @@ pip install -r phraise/requirements.txt
 python run.py
 ```
 
-On first launch, right-click the tray icon or floating ball -> **Settings** -> configure at least one model with your API key, or set **Optimize** to **Harper** to use the local grammar engine.
+> 👉 On first launch, right-click the tray icon or floating ball -> **Settings** -> configure at least one model with your API key, or set **Optimize** to **Harper** to use the local grammar engine.
 
 
 ## Build
