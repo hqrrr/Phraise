@@ -1,0 +1,75 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r phraise/requirements.txt
+
+      - name: Determine release version
+        id: version
+        shell: python
+        run: |
+          import os
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, str(Path.cwd()))
+          from phraise.__version__ import VERSION
+
+          ref_type = os.environ.get("GITHUB_REF_TYPE", "")
+          ref_name = os.environ.get("GITHUB_REF_NAME", "")
+
+          if ref_type == "tag":
+              release_version = ref_name
+          else:
+              release_version = VERSION
+
+          print(f"release_version={release_version}")
+          print(f"build_version={VERSION}")
+
+          output = os.environ["GITHUB_OUTPUT"]
+          with open(output, "a") as f:
+              print(f"release_version={release_version}", file=f)
+              print(f"build_version={VERSION}", file=f)
+
+      - name: Build executable
+        run: python build.py
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          RELEASE_VERSION="${{ steps.version.outputs.release_version }}"
+          BUILD_VERSION="${{ steps.version.outputs.build_version }}"
+          EXE_PATH="dist/PhrAIse_${BUILD_VERSION}.exe"
+
+          echo "Release version: $RELEASE_VERSION"
+          echo "Build version:   $BUILD_VERSION"
+          echo "Executable path: $EXE_PATH"
+
+          gh release create "$RELEASE_VERSION" "$EXE_PATH" \
+            --title "$RELEASE_VERSION" \
+            --generate-notes
