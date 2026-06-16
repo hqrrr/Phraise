@@ -19,4 +19,4 @@ Legend:
 
 - ✅ Provider has confirmed.
 - ❌ Provider has declined.
-- ❓ Not clear / confirmed.
+- ❓ Not clear or confirmed.
