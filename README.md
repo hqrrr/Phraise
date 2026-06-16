@@ -2,10 +2,11 @@
 
 <img src="phraise/assets/phraise_logo.svg" alt="PhrAIse Logo" width="100"/>
 
-[![License](https://img.shields.io/badge/license-GPL--3.0-lightgray)](LICENSE)&nbsp;
-[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2B-4c8eda)](https://github.com/hqrrr/Phraise)&nbsp;
-[![Python](https://img.shields.io/badge/Python-3.11%2B-4c8eda)](https://python.org)&nbsp;
-[![Downloads](https://img.shields.io/github/downloads/hqrrr/Phraise/total?color=4c8eda)](https://github.com/hqrrr/Phraise/releases)
+[![Downloads](https://img.shields.io/github/downloads/hqrrr/Phraise/total?color=4c8eda)](https://github.com/hqrrr/Phraise/releases)&nbsp;
+[![Release](https://img.shields.io/github/v/release/hqrrr/Phraise?label=release&color=4c8eda)](https://github.com/hqrrr/Phraise/releases)
+&nbsp;
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2B-4c8eda)](https://github.com/hqrrr/Phraise)&nbsp;
+[![License](https://img.shields.io/badge/license-GPL--3.0-lightgray)](LICENSE)
 
 > A system-wide AI writing assistant. Use your own LLM API keys - or run grammar checks locally - no subscription, no vendor lock-in, full control.
 
