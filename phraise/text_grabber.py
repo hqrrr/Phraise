@@ -263,9 +263,9 @@ class TextGrabber:
         try:
             self._save_clipboard()
             pyperclip.copy(new_text)
-            time.sleep(0.1)
+            time.sleep(0.02)
             self._send_paste()
-            time.sleep(0.1)
+            time.sleep(0.02)
             self._restore_clipboard()
             return True
         except Exception as e:
