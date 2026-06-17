@@ -27,7 +27,8 @@
     - [Core System Features](#core-system-features)
   - [LLM Providers](#llm-providers)
   - [Configuration](#configuration)
-  - [Hotkeys](#hotkeys)
+    - [Custom Theming](#custom-theming)
+    - [Hotkeys](#hotkeys)
   - [Getting Started](#getting-started)
     - [Download Pre-built `.exe`](#download-pre-built-exe)
     - [Run from Source](#run-from-source)
@@ -103,7 +104,11 @@ The built-in provider list is fetched from **[models.dev](https://github.com/ano
 
 Settings are in `%APPDATA%/PhrAIse/settings.json`. All configurable through the Settings panel.
 
-## Hotkeys
+### Custom Theming
+
+PhrAIse supports built-in color themes and custom CSS overrides. See the [Custom Theming Guide](Custom_Theming.md) for details on selecting themes, writing override CSS, and adding new palettes.
+
+### Hotkeys
 
 | Hotkey                    | Action                                      |
 |---------------------------|---------------------------------------------|
@@ -111,7 +116,7 @@ Settings are in `%APPDATA%/PhrAIse/settings.json`. All configurable through the 
 | `Ctrl+Shift+B`            | Toggle floating ball visibility             |
 | `Esc`                     | Close floating window                       |
 
-All hotkeys are configurable in **Settings**.
+Hotkeys are configurable in **Settings**.
 
 ## Getting Started
 
