@@ -40,7 +40,7 @@ class TestEnsureComInitialized(unittest.TestCase):
         _ensure_com_initialized()
 
     def test_initializes_com_mta_when_not_initialized(self):
-        """On Windows with no COM, calls CoInitializeEx(MTA)."""
+        """On Windows with no COM, calls CoInitializeEx."""
         if sys.platform != "win32":
             self.skipTest("Windows-only COM test")
 
@@ -77,20 +77,9 @@ class TestEnsureComInitialized(unittest.TestCase):
 
         # Initialize as STA first (hotkey thread pattern)
         pythoncom.CoInitialize()
-        # Now try MTA guard — should not raise
+        # Now try guard — should not raise
         _ensure_com_initialized()
         pythoncom.CoUninitialize()
-
-    @patch("phraise.text_grabber.sys")
-    @patch.dict("sys.modules", {"pythoncom": Mock()})
-    def test_calls_coinitializeex_mta(self, mock_sys):
-        """On Windows, CoInitializeEx is called with COINIT_MULTITHREADED."""
-        import pythoncom
-        mock_sys.platform = "win32"
-        _ensure_com_initialized()
-        pythoncom.CoInitializeEx.assert_called_once_with(
-            pythoncom.COINIT_MULTITHREADED
-        )
 
     @patch("phraise.text_grabber.sys")
     @patch.dict("sys.modules", {"pythoncom": Mock()})

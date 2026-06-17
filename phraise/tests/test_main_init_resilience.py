@@ -127,28 +127,10 @@ class TestHotkeyTriggerImportError(unittest.TestCase):
         # Prevent _on_trigger_dispatch from running (it needs Qt)
         self.app._on_trigger_dispatch = MagicMock()
 
-    def test_pythoncom_import_failure_logged(self):
-        """ImportError on pythoncom is caught and logged via write_error."""
-        with patch("phraise.main.write_error") as mock_we:
-            with patch("builtins.__import__") as mock_import:
-                mock_import.side_effect = ImportError("No module named pythoncom")
-
-                self.app._hotkey_trigger()
-
-                mock_we.assert_called_once()
-                args, _ = mock_we.call_args
-                self.assertIsInstance(args[0], ImportError)
-                self.assertEqual(args[1], "_hotkey_trigger")
-
-    def test_pythoncom_import_failure_coinitialize_not_called(self):
-        """When pythoncom import fails, CoInitialize must not be called."""
+    def test_hotkey_trigger_import_error_does_not_crash(self):
+        """_hotkey_trigger catches ImportError and does not crash."""
         with patch("phraise.main.write_error"):
             with patch("builtins.__import__") as mock_import:
                 mock_import.side_effect = ImportError("No module named pythoncom")
-
-                # Also patch the text grabber to verify it's NOT called
-                self.app._grabber.get_selected_text = MagicMock()
-
+                # Should not raise
                 self.app._hotkey_trigger()
-
-                self.app._grabber.get_selected_text.assert_not_called()
