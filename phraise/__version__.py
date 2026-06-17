@@ -5,4 +5,4 @@
 #
 # Description: Version information for the PhrAIse package.
 
-VERSION = "v0.1.1"
+VERSION = "v0.1.2"
