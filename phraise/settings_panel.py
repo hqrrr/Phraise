@@ -282,6 +282,9 @@ class SettingsPanel(QDialog):
         layout.addWidget(dialect_row)
 
         layout.addSpacing(12)
+        llm_section_label = QLabel(t("settings.section.llm"))
+        llm_section_label.setStyleSheet(label_style(self._theme_colors, "text", "font-size: 14px; font-weight: 600;"))
+        layout.addWidget(llm_section_label)
 
         self._model_entries = {}
         self._build_model_section(layout, t("settings.model.one"), "model_1", fast_cfg)

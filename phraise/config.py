@@ -55,7 +55,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "floating_ball": {
         "position_x": 1800,
         "position_y": 500,
-        "size": 40,
+        "size": 36,
         "opacity": 0.80,
         "theme": "dark",
     },
