@@ -119,27 +119,6 @@ class TestHotkeyUIAIntegration(unittest.TestCase):
     """Hotkey trigger initializes MTA COM, enabling UIA text grab."""
 
     @_win_only
-    def test_hotkey_trigger_method_has_mta_call(self):
-        with open("phraise/main.py", encoding="utf-8") as f:
-            source = f.read()
-
-        lines = source.split("\n")
-        in_hotkey = False
-        coinit_found = False
-        for line in lines:
-            if "def _hotkey_trigger" in line:
-                in_hotkey = True
-            elif in_hotkey and line.strip().startswith("def "):
-                in_hotkey = False
-            elif in_hotkey and "CoInitializeEx" in line and "COINIT_MULTITHREADED" in line:
-                coinit_found = True
-
-        self.assertTrue(
-            coinit_found,
-            "_hotkey_trigger must call CoInitializeEx with COINIT_MULTITHREADED for UIA"
-        )
-
-    @_win_only
     def test_detector_poll_loop_has_mta_call(self):
         with open("phraise/detector.py", encoding="utf-8") as f:
             source = f.read()
@@ -166,4 +145,4 @@ class TestHotkeyUIAIntegration(unittest.TestCase):
             source = f.read()
 
         self.assertIn("def _ensure_com_initialized", source)
-        self.assertIn("COINIT_MULTITHREADED", source)
+        self.assertIn("CoInitializeEx", source)

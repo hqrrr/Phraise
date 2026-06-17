@@ -752,7 +752,9 @@ class FloatingWindow(QWidget):
             widget = self
         widget.installEventFilter(self)
         widget.setMouseTracking(True)
-        for child in widget.findChildren(QWidget):
+        for child in widget.children():
+            if not isinstance(child, QWidget):
+                continue
             if isinstance(child, _INTERACTIVE_TYPES) or self._has_interactive_ancestor(child, widget):
                 continue
             child.installEventFilter(self)
@@ -782,6 +784,7 @@ class FloatingWindow(QWidget):
             if self._resizing or edge:
                 self._on_resize_move(local_pos, gpos, cursor_widget=watched)
                 return True
+            watched.unsetCursor()
             return False
 
         if event.type() == QEvent.MouseButtonRelease:
@@ -1347,6 +1350,7 @@ class FloatingWindow(QWidget):
         self._close_btn.setStyleSheet(btn_style(tc, "red"))
         self._regenerate_btn.setIcon(qta.icon("fa5s.redo", color=tc["text_muted"]))
         self._regenerate_btn.setStyleSheet(btn_style(tc))
+        self._title_label.setStyleSheet(label_style(tc, "text", "font-weight: 600; font-size: 13px;"))
 
         self._tabs.setStyleSheet(tab_style(tc))
         if self._model_combo is not None:

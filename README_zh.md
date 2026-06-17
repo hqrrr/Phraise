@@ -6,7 +6,9 @@
 [![Release](https://img.shields.io/github/v/release/hqrrr/Phraise?label=release&color=4c8eda)](https://github.com/hqrrr/Phraise/releases)
 &nbsp;
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2B-4c8eda)](https://github.com/hqrrr/Phraise)&nbsp;
-[![License](https://img.shields.io/badge/license-GPL--3.0-lightgray)](LICENSE)
+[![License](https://img.shields.io/badge/license-GPL--3.0-lightgray)](LICENSE)&nbsp;
+![CI](https://github.com/hqrrr/PhrAIse/actions/workflows/ci.yml/badge.svg)&nbsp;
+![Coverage](docs/coverage.svg)
 
 > 系统级 AI 写作助手。使用你自己的 LLM API Key，或者本地运行语法检查 —— 无订阅费，不绑定服务商，完全可控。
 
@@ -27,7 +29,8 @@
     - [核心系统功能](#核心系统功能)
   - [支持的 LLM 服务商](#支持的-llm-服务商)
   - [配置说明](#配置说明)
-  - [快捷键](#快捷键)
+    - [自定义主题](#自定义主题)
+    - [快捷键](#快捷键)
   - [快速开始](#快速开始)
     - [下载预编译 `.exe`](#下载预编译-exe)
     - [从源码运行](#从源码运行)
@@ -99,15 +102,20 @@
 
 配置文件位于 `%APPDATA%/PhrAIse/settings.json`，所有设置均可通过设置面板修改。
 
-## 快捷键
+### 自定义主题
 
-| 快捷键              | 功能           |
-|------------------|--------------|
+PhrAIse 支持内置颜色主题和自定义 CSS 覆盖。有关选择主题、编写覆盖 CSS 以及添加新配色方案的详细信息，请参阅 [自定义主题指南](Custom_Theming_zh.md)。
+
+### 快捷键
+
+| 快捷键              | 功能                   |
+|---------------------|-----------------------|
 | `Ctrl+C+C`（双击 C） | 对选中文字触发优化/翻译 |
-| `Ctrl+Shift+B`   | 切换悬浮球显示/隐藏   |
-| `Esc`            | 关闭悬浮窗        |
+| `Ctrl+Shift+B`      | 切换悬浮球显示/隐藏     |
+| `Esc`               | 关闭悬浮窗              |
 
-所有快捷键均可在 **设置** 中修改。
+
+快捷键可在 **设置** 中修改。
 
 ## 快速开始
 

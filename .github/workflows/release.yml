@@ -16,6 +16,19 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Ensure tag is on main
+        shell: bash
+        run: |
+          TAG_SHA=$(git rev-list -n 1 ${{ github.ref_name }})
+          MAIN_SHA=$(git rev-parse origin/main)
+          if [ "$TAG_SHA" != "$MAIN_SHA" ]; then
+            echo "Tag ${{ github.ref_name }} ($TAG_SHA) is not on main branch ($MAIN_SHA). Skipping."
+            exit 1
+          fi
+          echo "Tag is on main. Proceeding."
 
       - name: Set up Python
         uses: actions/setup-python@v6

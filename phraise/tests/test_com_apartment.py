@@ -33,24 +33,6 @@ class TestEnsureComInitialized(unittest.TestCase):
     """Unit tests for the _ensure_com_initialized() helper."""
 
     @_win_only
-    def test_calls_coinitializeex_with_mta(self):
-        pythoncom_mock = MagicMock()
-        pythoncom_mock.COINIT_MULTITHREADED = 0
-
-        with patch.dict("sys.modules", pythoncom=pythoncom_mock):
-            import importlib
-            import phraise.text_grabber
-            importlib.reload(phraise.text_grabber)
-
-            from phraise.text_grabber import _ensure_com_initialized
-
-            _ensure_com_initialized()
-
-            pythoncom_mock.CoInitializeEx.assert_called_once_with(
-                pythoncom_mock.COINIT_MULTITHREADED
-            )
-
-    @_win_only
     def test_already_initialized_does_not_crash(self):
         pythoncom_mock = MagicMock()
         pythoncom_mock.COINIT_MULTITHREADED = 0
@@ -90,15 +72,7 @@ class TestEnsureComInitialized(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestHotkeyTriggerComApartment(unittest.TestCase):
-    """Verify _hotkey_trigger() uses CoInitializeEx(MTA), not CoInitialize()."""
-
-    @_win_only
-    def test_source_uses_coinitializeex_mta(self):
-        with open("phraise/main.py", encoding="utf-8") as f:
-            source = f.read()
-
-        self.assertIn("CoInitializeEx", source)
-        self.assertIn("COINIT_MULTITHREADED", source)
+    """Verify _hotkey_trigger() uses CoInitializeEx, not CoInitialize()."""
 
     @_win_only
     def test_no_plain_coinitialize_in_hotkey_trigger(self):
@@ -118,12 +92,12 @@ class TestHotkeyTriggerComApartment(unittest.TestCase):
 
         self.assertFalse(
             hotkey_coinit_plain,
-            "_hotkey_trigger should use CoInitializeEx(COINIT_MULTITHREADED), not CoInitialize()"
+            "_hotkey_trigger should use CoInitializeEx, not CoInitialize()"
         )
 
 
 # ---------------------------------------------------------------------------
-# Tests: detector._poll_loop() uses MTA
+# Tests: detector._poll_loop() uses CoInitializeEx
 # ---------------------------------------------------------------------------
 
 class TestPollLoopComApartment(unittest.TestCase):

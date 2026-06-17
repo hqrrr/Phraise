@@ -526,6 +526,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Harper Settings",
         "zh-CN": "Harper 设置",
     },
+    "settings.section.llm": {
+        "en": "LLM Settings",
+        "zh-CN": "LLM 设置",
+    },
     "settings.label.harper_dialect": {
         "en": "English Dialect:",
         "zh-CN": "英语方言：",

@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+  push:
+    branches:
+      - main
+      - dev
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r phraise/requirements.txt
+
+      - name: Run tests with coverage
+        run: python -m pytest phraise/tests -v --cov=phraise --cov-report=term --cov-report=xml
+
+      - name: Generate coverage badge
+        run: |
+          genbadge coverage -i coverage.xml -o docs/coverage.svg -l -s
+
+      - name: Commit coverage badge
+        if: github.event_name == 'push'
+        uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          commit_message: "chore: update coverage badge"
+          file_pattern: docs/coverage.svg

@@ -6,7 +6,9 @@
 [![Release](https://img.shields.io/github/v/release/hqrrr/Phraise?label=release&color=4c8eda)](https://github.com/hqrrr/Phraise/releases)
 &nbsp;
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2B-4c8eda)](https://github.com/hqrrr/Phraise)&nbsp;
-[![License](https://img.shields.io/badge/license-GPL--3.0-lightgray)](LICENSE)
+[![License](https://img.shields.io/badge/license-GPL--3.0-lightgray)](LICENSE)&nbsp;
+![CI](https://github.com/hqrrr/PhrAIse/actions/workflows/ci.yml/badge.svg)&nbsp;
+![Coverage](docs/coverage.svg)
 
 > A system-wide AI writing assistant. Use your own LLM API keys - or run grammar checks locally - no subscription, no vendor lock-in, full control.
 
@@ -27,7 +29,8 @@
     - [Core System Features](#core-system-features)
   - [LLM Providers](#llm-providers)
   - [Configuration](#configuration)
-  - [Hotkeys](#hotkeys)
+    - [Custom Theming](#custom-theming)
+    - [Hotkeys](#hotkeys)
   - [Getting Started](#getting-started)
     - [Download Pre-built `.exe`](#download-pre-built-exe)
     - [Run from Source](#run-from-source)
@@ -103,7 +106,11 @@ The built-in provider list is fetched from **[models.dev](https://github.com/ano
 
 Settings are in `%APPDATA%/PhrAIse/settings.json`. All configurable through the Settings panel.
 
-## Hotkeys
+### Custom Theming
+
+PhrAIse supports built-in color themes and custom CSS overrides. See the [Custom Theming Guide](Custom_Theming.md) for details on selecting themes, writing override CSS, and adding new palettes.
+
+### Hotkeys
 
 | Hotkey                    | Action                                      |
 |---------------------------|---------------------------------------------|
@@ -111,7 +118,7 @@ Settings are in `%APPDATA%/PhrAIse/settings.json`. All configurable through the 
 | `Ctrl+Shift+B`            | Toggle floating ball visibility             |
 | `Esc`                     | Close floating window                       |
 
-All hotkeys are configurable in **Settings**.
+Hotkeys are configurable in **Settings**.
 
 ## Getting Started
 

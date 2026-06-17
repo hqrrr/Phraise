@@ -282,6 +282,9 @@ class SettingsPanel(QDialog):
         layout.addWidget(dialect_row)
 
         layout.addSpacing(12)
+        llm_section_label = QLabel(t("settings.section.llm"))
+        llm_section_label.setStyleSheet(label_style(self._theme_colors, "text", "font-size: 14px; font-weight: 600;"))
+        layout.addWidget(llm_section_label)
 
         self._model_entries = {}
         self._build_model_section(layout, t("settings.model.one"), "model_1", fast_cfg)
@@ -597,18 +600,14 @@ class SettingsPanel(QDialog):
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(6, 2, 6, 2)
         self._lbl_style_id = QLabel(t("settings.header.style_id"))
-        self._lbl_style_id.setFixedWidth(80)
         self._lbl_style_id.setStyleSheet(label_style(self._theme_colors, "text_muted", "font-weight: bold; font-size: 11px;"))
-        header_layout.addWidget(self._lbl_style_id)
+        header_layout.addWidget(self._lbl_style_id, 1)
         hl_label = QLabel(t("settings.header.style_label"))
-        hl_label.setFixedWidth(80)
         hl_label.setStyleSheet(label_style(self._theme_colors, "text_muted", "font-weight: bold; font-size: 11px;"))
-        header_layout.addWidget(hl_label)
+        header_layout.addWidget(hl_label, 1)
         hl_kw = QLabel(t("settings.header.style_keyword"))
-        hl_kw.setFixedWidth(150)
         hl_kw.setStyleSheet(label_style(self._theme_colors, "text_muted", "font-weight: bold; font-size: 11px;"))
-        header_layout.addWidget(hl_kw)
-        header_layout.addStretch()
+        header_layout.addWidget(hl_kw, 2)
         layout.addWidget(header)
 
         self._style_entries: list[dict] = []
@@ -620,19 +619,16 @@ class SettingsPanel(QDialog):
             row.setStyleSheet(f"background: {self._theme_colors['surface']}; border-radius: 4px;")
 
             id_entry = QLineEdit(s.get("id", ""))
-            id_entry.setFixedWidth(80)
             id_entry.setStyleSheet(entry_style(self._theme_colors))
-            row_layout.addWidget(id_entry)
+            row_layout.addWidget(id_entry, 1)
 
             label_entry = QLineEdit(s.get("label", ""))
-            label_entry.setFixedWidth(80)
             label_entry.setStyleSheet(entry_style(self._theme_colors))
-            row_layout.addWidget(label_entry)
+            row_layout.addWidget(label_entry, 1)
 
             kw_entry = QLineEdit(s.get("prompt_keyword", ""))
-            kw_entry.setFixedWidth(150)
             kw_entry.setStyleSheet(entry_style(self._theme_colors))
-            row_layout.addWidget(kw_entry)
+            row_layout.addWidget(kw_entry, 2)
 
             del_btn = QPushButton("−")
             del_btn.setFixedSize(24, 24)
@@ -671,19 +667,16 @@ class SettingsPanel(QDialog):
         row.setStyleSheet(f"background: {self._theme_colors['surface']}; border-radius: 4px;")
 
         id_entry = QLineEdit(id_val)
-        id_entry.setFixedWidth(80)
         id_entry.setStyleSheet(entry_style(self._theme_colors))
-        row_layout.addWidget(id_entry)
+        row_layout.addWidget(id_entry, 1)
 
         label_entry = QLineEdit(label_val)
-        label_entry.setFixedWidth(80)
         label_entry.setStyleSheet(entry_style(self._theme_colors))
-        row_layout.addWidget(label_entry)
+        row_layout.addWidget(label_entry, 1)
 
         kw_entry = QLineEdit(keyword_val)
-        kw_entry.setFixedWidth(150)
         kw_entry.setStyleSheet(entry_style(self._theme_colors))
-        row_layout.addWidget(kw_entry)
+        row_layout.addWidget(kw_entry, 2)
 
         del_btn = QPushButton("−")
         del_btn.setFixedSize(24, 24)
