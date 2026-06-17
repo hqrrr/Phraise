@@ -6,7 +6,9 @@
 [![Release](https://img.shields.io/github/v/release/hqrrr/Phraise?label=release&color=4c8eda)](https://github.com/hqrrr/Phraise/releases)
 &nbsp;
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2B-4c8eda)](https://github.com/hqrrr/Phraise)&nbsp;
-[![License](https://img.shields.io/badge/license-GPL--3.0-lightgray)](LICENSE)
+[![License](https://img.shields.io/badge/license-GPL--3.0-lightgray)](LICENSE)&nbsp;
+![CI](https://github.com/hqrrr/PhrAIse/actions/workflows/ci.yml/badge.svg)&nbsp;
+![Coverage](docs/coverage.svg)
 
 > A system-wide AI writing assistant. Use your own LLM API keys - or run grammar checks locally - no subscription, no vendor lock-in, full control.
 
