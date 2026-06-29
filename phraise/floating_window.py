@@ -1153,8 +1153,14 @@ class FloatingWindow(QWidget):
         config.set("floating_window", "last_style", value=style_id)
         for sid, btn in self._style_buttons.items():
             btn.setStyleSheet(style_btn_style(self._theme_colors, sid == style_id))
+        if hasattr(self, "_combined_style_buttons"):
+            for sid, btn in self._combined_style_buttons.items():
+                btn.setStyleSheet(style_btn_style(self._theme_colors, sid == style_id))
         if self._current_text:
-            self._do_optimize()
+            if self._current_mode == "optimize_translate":
+                self._do_optimize_translate()
+            elif self._current_mode == "optimize":
+                self._do_optimize()
 
     # ---- Layout switching ----
 
@@ -1432,7 +1438,9 @@ class FloatingWindow(QWidget):
 
         self._combined_optimize_loading.show()
         self._combined_translate_loading.show()
-        self._set_loading_state(True)
+        self._regenerate_btn.setIcon(
+            qta.icon("fa5s.spinner", color=self._theme_colors["yellow"])
+        )
 
         self._combined_pending = 2
 
@@ -1463,8 +1471,8 @@ class FloatingWindow(QWidget):
             if prev is not None:
                 try:
                     prev.finished.disconnect()
-                except Exception:
-                    pass
+                except RuntimeError:
+                    pass  # Signal may already be disconnected; ignore.
             self._combined_active_client = client
 
             client.finished.connect(
@@ -1478,7 +1486,12 @@ class FloatingWindow(QWidget):
                     success=True, issues=issues, corrected_text=corrected_text
                 )
                 self._on_combined_harper_done(sync_result)
-        except Exception:
+        except (RuntimeError, OSError, ValueError):
+            self._show_toast(t("harper.error.process_crash"))
+            self._do_optimize_translate_llm()
+            return
+        except Exception as e:
+            write_error(e, "FloatingWindow._do_optimize_translate_harper")
             self._show_toast(t("harper.error.process_crash"))
             self._do_optimize_translate_llm()
             return
@@ -1559,7 +1572,9 @@ class FloatingWindow(QWidget):
         self._combined_pending -= 1
         if self._combined_pending <= 0:
             self._is_loading = False
-            self._set_loading_state(False)
+            self._regenerate_btn.setIcon(
+                qta.icon("fa5s.redo", color=self._theme_colors["text_muted"])
+            )
 
     def _on_combined_optimize_done(self, result, error):
         if not shiboken6.isValid(self):
@@ -1598,7 +1613,9 @@ class FloatingWindow(QWidget):
         self._combined_pending -= 1
         if self._combined_pending <= 0:
             self._is_loading = False
-            self._set_loading_state(False)
+            self._regenerate_btn.setIcon(
+                qta.icon("fa5s.redo", color=self._theme_colors["text_muted"])
+            )
 
     def _on_combined_translate_done(self, result, error):
         if not shiboken6.isValid(self):
@@ -1621,7 +1638,9 @@ class FloatingWindow(QWidget):
         self._combined_pending -= 1
         if self._combined_pending <= 0:
             self._is_loading = False
-            self._set_loading_state(False)
+            self._regenerate_btn.setIcon(
+                qta.icon("fa5s.redo", color=self._theme_colors["text_muted"])
+            )
 
     def _populate_combined_grammar_issues(self, issues: list):
         while self._combined_grammar_layout.count():

@@ -17,6 +17,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QTextEdit
 
@@ -646,6 +647,81 @@ class TestCombinedParallel(unittest.TestCase):
             mock_opt.assert_not_called()
             mock_trans.assert_not_called()
             mock_combined.assert_called_once()
+
+    # ------------------------------------------------------------------
+    # Loading indicators (F1)
+    # ------------------------------------------------------------------
+
+    def test_no_central_loading_overlay_during_combined_load(self):
+        """Combined tab must not show central _loading_overlay during load."""
+        fw = self._make_fw()
+        self._set_text_and_style(fw)
+        fw._loading_overlay.show = MagicMock()
+
+        def mock_opt(original_text, style, style_label, model_type, on_done):
+            on_done({"rewrites": [{"text": "A"}], "grammar_issues": []}, None)
+
+        def mock_trans(original_text, source_lang, target_lang, model_type, on_done):
+            on_done({"translation": "B"}, None)
+
+        with (
+            patch("phraise.floating_window.optimize_text", side_effect=mock_opt),
+            patch("phraise.floating_window.translate_text", side_effect=mock_trans),
+        ):
+            fw._do_optimize_translate()
+
+        fw._loading_overlay.show.assert_not_called()
+        self.assertFalse(fw._is_loading)
+
+    def test_regenerate_button_spinner_during_combined_load(self):
+        """Combined tab must set spinner icon on _regenerate_btn during load and reset after."""
+        fw = self._make_fw()
+        self._set_text_and_style(fw)
+
+        def mock_opt(original_text, style, style_label, model_type, on_done):
+            on_done({"rewrites": [{"text": "A"}], "grammar_issues": []}, None)
+
+        def mock_trans(original_text, source_lang, target_lang, model_type, on_done):
+            on_done({"translation": "B"}, None)
+
+        with (
+            patch("phraise.floating_window.optimize_text", side_effect=mock_opt),
+            patch("phraise.floating_window.translate_text", side_effect=mock_trans),
+            patch("phraise.floating_window.qta.icon", return_value=QIcon()) as mock_icon,
+        ):
+            fw._do_optimize_translate()
+
+        spinner_calls = [c for c in mock_icon.call_args_list if c.args == ("fa5s.spinner",)]
+        redo_calls = [c for c in mock_icon.call_args_list if c.args == ("fa5s.redo",)]
+        self.assertEqual(len(spinner_calls), 1)
+        self.assertEqual(spinner_calls[0].kwargs["color"], fw._theme_colors["yellow"])
+        self.assertEqual(len(redo_calls), 1)
+        self.assertEqual(redo_calls[0].kwargs["color"], fw._theme_colors["text_muted"])
+
+    # ------------------------------------------------------------------
+    # Style change in combined mode (F2)
+    # ------------------------------------------------------------------
+
+    def test_on_style_change_combined_mode(self):
+        """_on_style_change in combined mode updates both style button groups and reruns combined flow."""
+        fw = self._make_fw()
+        fw._current_text = "hello"
+        fw._current_mode = "optimize_translate"
+        fw._current_style = "formal"
+
+        with (
+            patch("phraise.floating_window.config.set") as mock_config_set,
+            patch("phraise.floating_window.style_btn_style", return_value="styled") as mock_style,
+            patch.object(fw, "_do_optimize_translate") as mock_combined,
+        ):
+            fw._on_style_change("concise")
+
+        self.assertEqual(fw._current_style, "concise")
+        mock_config_set.assert_called_once_with("floating_window", "last_style", value="concise")
+        mock_combined.assert_called_once()
+        normal_calls = [c for c in mock_style.call_args_list if c.args[0] is fw._theme_colors]
+        self.assertEqual(len(normal_calls), 2)
+        self.assertTrue(all(c.args[1] is True for c in normal_calls))
 
 
 
