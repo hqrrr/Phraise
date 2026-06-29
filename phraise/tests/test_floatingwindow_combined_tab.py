@@ -16,9 +16,19 @@ Verifies:
 import unittest
 from unittest.mock import MagicMock, patch
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QTextEdit
 
-from phraise.floating_window import FloatingWindow
+from phraise.floating_window import FloatingWindow, NoScrollComboBox, _HoverTextEdit
+from phraise.i18n import t
+
+
+def _inspect_signal_source():
+    """Inspect _build_optimize_translate_tab source for expected clicked.connect calls."""
+    import inspect
+    source = inspect.getsource(FloatingWindow._build_optimize_translate_tab)
+    return source
 
 
 def _qapp():
@@ -187,6 +197,110 @@ class TestModeIndex(unittest.TestCase):
                       "_on_regenerate must reference optimize_translate mode")
         self.assertIn("_do_optimize_translate", source,
                       "_on_regenerate must call _do_optimize_translate()")
+
+
+class TestCombinedTabUI(unittest.TestCase):
+    """Verify the third Optimize + Translate tab contains the required widgets."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._app = _qapp()
+
+    def setUp(self) -> None:
+        for attr in ("_rewrite_texts", "_translation_text"):
+            try:
+                delattr(FloatingWindow, attr)
+            except AttributeError:
+                pass
+
+    def _make_fw(self) -> FloatingWindow:
+        """Create a minimal FloatingWindow with mocked dependencies."""
+        grabber = MagicMock()
+        with (
+            patch("phraise.floating_window.add_listener", return_value=None),
+            patch("phraise.floating_window.config.update_section", return_value=None),
+            patch("phraise.i18n.add_listener", return_value=None),
+            patch("phraise.floating_window.config.get", side_effect=_mock_config_get),
+        ):
+            fw = FloatingWindow(grabber, on_close=MagicMock())
+        return fw
+
+    def test_combined_tab_exists_at_index_two(self):
+        """Third tab at index 2 must exist with the optimize_translate label."""
+        fw = self._make_fw()
+        self.assertEqual(fw._tabs.count(), 3)
+        with patch("phraise.floating_window.config.get", side_effect=_mock_config_get):
+            self.assertEqual(fw._tabs.tabText(2), t("fw.tab.optimize_translate"))
+
+    def test_combined_tab_has_three_rewrite_boxes(self):
+        """Combined tab must expose three _HoverTextEdit rewrite boxes."""
+        fw = self._make_fw()
+        self.assertTrue(hasattr(fw, "_combined_rewrite_texts"))
+        self.assertEqual(len(fw._combined_rewrite_texts), 3)
+        for he in fw._combined_rewrite_texts:
+            self.assertIsInstance(he, _HoverTextEdit)
+
+    def test_combined_tab_has_language_combos(self):
+        """Combined tab must have source and target language NoScrollComboBox widgets."""
+        fw = self._make_fw()
+        self.assertIsInstance(fw._combined_source_lang, NoScrollComboBox)
+        self.assertIsInstance(fw._combined_target_lang, NoScrollComboBox)
+
+    def test_combined_tab_has_translation_text(self):
+        """Combined tab must have a read-only translation result QTextEdit."""
+        fw = self._make_fw()
+        self.assertIsInstance(fw._combined_translation_text, QTextEdit)
+        self.assertTrue(fw._combined_translation_text.isReadOnly())
+
+    def test_combined_tab_has_replace_and_copy_buttons(self):
+        """Combined tab must have Replace and Copy buttons for translation."""
+        fw = self._make_fw()
+        self.assertIsInstance(fw._combined_trans_replace_btn, QPushButton)
+        self.assertIsInstance(fw._combined_trans_copy_btn, QPushButton)
+
+    def test_combined_tab_has_no_custom_instruction_widget(self):
+        """Combined tab must omit the custom instruction entry used in the optimize tab."""
+        fw = self._make_fw()
+        self.assertFalse(hasattr(fw, "_combined_custom_entry"))
+        self.assertFalse(hasattr(fw, "_combined_custom_btn"))
+
+    def test_combined_tab_loading_indicators_exist_and_hidden(self):
+        """Combined tab must have per-section loading indicators, hidden by default."""
+        fw = self._make_fw()
+        self.assertIsInstance(fw._combined_optimize_loading, QLabel)
+        self.assertIsInstance(fw._combined_translate_loading, QLabel)
+        self.assertTrue(fw._combined_optimize_loading.isHidden())
+        self.assertTrue(fw._combined_translate_loading.isHidden())
+
+    def test_combined_tab_has_grammar_section(self):
+        """Combined tab must have a grammar issues collapsible section header."""
+        fw = self._make_fw()
+        self.assertIsInstance(fw._combined_grammar_header, QLabel)
+        self.assertTrue(hasattr(fw, "_combined_grammar_container"))
+
+    def test_combined_tab_style_buttons_connected(self):
+        """Each combined tab style button must route clicks to _on_style_change."""
+        fw = self._make_fw()
+        self.assertTrue(fw._combined_style_buttons)
+        source = _inspect_signal_source()
+        self.assertIn("btn.clicked.connect(lambda checked, sid=sid: self._on_style_change(sid))", source)
+        btn = next(iter(fw._combined_style_buttons.values()))
+        QTest.mouseClick(btn, Qt.MouseButton.LeftButton)
+
+    def test_combined_tab_replace_button_connected(self):
+        """Combined tab Replace button must call _do_replace with combined translation text."""
+        fw = self._make_fw()
+        source = _inspect_signal_source()
+        self.assertIn("_combined_translation_text.toPlainText()", source)
+        self.assertIn("self._do_replace", source)
+        QTest.mouseClick(fw._combined_trans_replace_btn, Qt.MouseButton.LeftButton)
+
+    def test_combined_tab_copy_button_connected(self):
+        """Combined tab Copy button must call _on_copy_text with combined translation text."""
+        fw = self._make_fw()
+        source = _inspect_signal_source()
+        self.assertIn("self._on_copy_text(self._combined_translation_text)", source)
+        QTest.mouseClick(fw._combined_trans_copy_btn, Qt.MouseButton.LeftButton)
 
 
 if __name__ == "__main__":

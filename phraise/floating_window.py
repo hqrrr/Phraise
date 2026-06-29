@@ -443,6 +443,7 @@ class FloatingWindow(QWidget):
 
         self._build_optimize_tab()
         self._build_translate_tab()
+        self._build_optimize_translate_tab()
 
         corner = QWidget()
         corner.setFixedSize(148, 30)
@@ -640,6 +641,191 @@ class FloatingWindow(QWidget):
         scroll.setWidget(container)
         self._tabs.addTab(scroll, t("fw.tab.translate"))
         self._translate_scroll = scroll
+
+    def _build_optimize_translate_tab(self):
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet(scroll_area_style(self._theme_colors))
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(4)
+
+        optimize_header_row = QWidget()
+        optimize_header_layout = QHBoxLayout(optimize_header_row)
+        optimize_header_layout.setContentsMargins(0, 0, 0, 0)
+        optimize_section_label = QLabel(t("fw.label.optimize_section"))
+        optimize_section_label.setStyleSheet(
+            label_style(self._theme_colors, "text", "font-size: 13px; font-weight: 600;")
+        )
+        optimize_header_layout.addWidget(optimize_section_label)
+        self._combined_optimize_loading = QLabel()
+        self._combined_optimize_loading.setPixmap(
+            qta.icon("fa5s.spinner", color=self._theme_colors["yellow"]).pixmap(QSize(16, 16))
+        )
+        self._combined_optimize_loading.hide()
+        optimize_header_layout.addWidget(self._combined_optimize_loading)
+        optimize_header_layout.addStretch()
+        layout.addWidget(optimize_header_row)
+
+        styles = config.get("styles", default=[])
+        style_widget = QWidget()
+        style_layout = FlowLayout(style_widget, spacing=4)
+        style_layout.setContentsMargins(0, 0, 0, 0)
+        self._combined_style_label = QLabel(t("fw.label.style"))
+        self._combined_style_label.setStyleSheet(
+            label_style(self._theme_colors, "text_muted", "font-size: 12px; font-weight: 500;")
+        )
+        style_layout.addWidget(self._combined_style_label)
+        self._combined_style_buttons: dict[str, QPushButton] = {}
+        for s in styles:
+            sid = s["id"]
+            label = t(f"style.{sid}")
+            if label == f"style.{sid}":
+                label = s.get("label", sid)
+            btn = QPushButton(label)
+            btn.setFixedSize(80, 26)
+            active = sid == self._current_style
+            btn.setStyleSheet(style_btn_style(self._theme_colors, active))
+            btn.clicked.connect(lambda checked, sid=sid: self._on_style_change(sid))
+            style_layout.addWidget(btn)
+            self._combined_style_buttons[sid] = btn
+        self._combined_style_widget = style_widget
+        layout.addWidget(style_widget)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setStyleSheet(separator_style(self._theme_colors))
+        layout.addWidget(sep)
+
+        self._combined_grammar_header = QLabel(t("fw.label.grammar_expanded"))
+        self._combined_grammar_header.setStyleSheet(
+            label_style(self._theme_colors, "text_muted", "font-size: 13px; font-weight: 600; margin-top: 6px;")
+        )
+        self._combined_grammar_header.setCursor(Qt.PointingHandCursor)
+        self._combined_grammar_header.mousePressEvent = lambda e: self._toggle_combined_grammar_section()
+        layout.addWidget(self._combined_grammar_header)
+
+        self._combined_grammar_container = QWidget()
+        self._combined_grammar_layout = QVBoxLayout(self._combined_grammar_container)
+        self._combined_grammar_layout.setContentsMargins(0, 4, 0, 4)
+        self._combined_grammar_layout.setSpacing(6)
+        layout.addWidget(self._combined_grammar_container)
+
+        self._combined_grammar_header.hide()
+        self._combined_grammar_container.hide()
+
+        self._combined_rewrite_label = QLabel(t("fw.label.rewrites"))
+        layout.addWidget(self._combined_rewrite_label)
+        self._combined_rewrite_texts: list[_HoverTextEdit] = []
+        for _ in range(3):
+            hover_edit = _HoverTextEdit(container, self._do_replace, self._on_copy_text, self._theme_colors)
+            hover_edit.text_edit.textChanged.connect(
+                lambda he=hover_edit: FloatingWindow._auto_resize_text_edit(he.text_edit)
+            )
+            layout.addWidget(hover_edit)
+            self._combined_rewrite_texts.append(hover_edit)
+
+        translate_sep = QFrame()
+        translate_sep.setFrameShape(QFrame.HLine)
+        translate_sep.setStyleSheet(separator_style(self._theme_colors))
+        layout.addWidget(translate_sep)
+
+        translate_header_row = QWidget()
+        translate_header_layout = QHBoxLayout(translate_header_row)
+        translate_header_layout.setContentsMargins(0, 0, 0, 0)
+        translate_section_label = QLabel(t("fw.label.translate_section"))
+        translate_section_label.setStyleSheet(
+            label_style(self._theme_colors, "text", "font-size: 13px; font-weight: 600;")
+        )
+        translate_header_layout.addWidget(translate_section_label)
+        self._combined_translate_loading = QLabel()
+        self._combined_translate_loading.setPixmap(
+            qta.icon("fa5s.spinner", color=self._theme_colors["yellow"]).pixmap(QSize(16, 16))
+        )
+        self._combined_translate_loading.hide()
+        translate_header_layout.addWidget(self._combined_translate_loading)
+        translate_header_layout.addStretch()
+        layout.addWidget(translate_header_row)
+
+        lang_widget = QWidget()
+        lang_layout = QHBoxLayout(lang_widget)
+        lang_layout.setContentsMargins(0, 0, 0, 0)
+        self._combined_source_lang_label = QLabel(t("fw.label.source_lang"))
+        lang_layout.addWidget(self._combined_source_lang_label)
+        self._combined_source_lang = NoScrollComboBox()
+        self._combined_source_lang.setFixedWidth(140)
+        self._combined_source_lang.setStyleSheet(combo_style(self._theme_colors))
+        for display_name, code in SOURCE_LANGUAGES:
+            self._combined_source_lang.addItem(display_name, code)
+        saved_source = config.get("translation", "source_lang", default="auto")
+        if saved_source == "en":
+            saved_source = "en-US"
+        idx = self._combined_source_lang.findData(saved_source)
+        if idx >= 0:
+            self._combined_source_lang.setCurrentIndex(idx)
+        lang_layout.addWidget(self._combined_source_lang)
+        self._combined_target_lang_label = QLabel(t("fw.label.target_lang"))
+        lang_layout.addWidget(self._combined_target_lang_label)
+        self._combined_target_lang = NoScrollComboBox()
+        self._combined_target_lang.setFixedWidth(140)
+        self._combined_target_lang.setStyleSheet(combo_style(self._theme_colors))
+        for display_name, code in TARGET_LANGUAGES:
+            self._combined_target_lang.addItem(display_name, code)
+        saved_target = config.get("translation", "target_lang", default="zh-CN")
+        if saved_target == "en":
+            saved_target = "en-US"
+        idx = self._combined_target_lang.findData(saved_target)
+        if idx >= 0:
+            self._combined_target_lang.setCurrentIndex(idx)
+        lang_layout.addWidget(self._combined_target_lang)
+        lang_layout.addStretch()
+        layout.addWidget(lang_widget)
+
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.HLine)
+        sep2.setStyleSheet(separator_style(self._theme_colors))
+        layout.addWidget(sep2)
+
+        self._combined_translation_result_label = QLabel(t("fw.label.translation_result"))
+        layout.addWidget(self._combined_translation_result_label)
+        self._combined_translation_text = QTextEdit()
+        self._combined_translation_text.setReadOnly(True)
+        self._combined_translation_text.setMinimumHeight(60)
+        self._combined_translation_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._combined_translation_text.setStyleSheet(text_edit_style(self._theme_colors))
+        layout.addWidget(self._combined_translation_text, 1)
+
+        trans_btn_row = QWidget()
+        trans_btn_layout = QHBoxLayout(trans_btn_row)
+        trans_btn_layout.setContentsMargins(0, 4, 0, 0)
+        self._combined_trans_replace_btn = QPushButton(t("fw.btn.replace_original"))
+        self._combined_trans_replace_btn.setFixedSize(130, 24)
+        self._combined_trans_replace_btn.setStyleSheet(action_btn_style(self._theme_colors, "accent"))
+        self._combined_trans_replace_btn.clicked.connect(lambda checked=False: self._do_replace(self._combined_translation_text.toPlainText()))
+        trans_btn_layout.addWidget(self._combined_trans_replace_btn)
+        self._combined_trans_copy_btn = QPushButton(t("fw.btn.copy"))
+        self._combined_trans_copy_btn.setFixedSize(50, 24)
+        self._combined_trans_copy_btn.setStyleSheet(action_btn_style(self._theme_colors, "surface"))
+        self._combined_trans_copy_btn.clicked.connect(lambda checked=False: self._on_copy_text(self._combined_translation_text))
+        trans_btn_layout.addWidget(self._combined_trans_copy_btn)
+        trans_btn_layout.addStretch()
+        layout.addWidget(trans_btn_row)
+
+        layout.addStretch()
+
+        scroll.setWidget(container)
+        self._tabs.addTab(scroll, t("fw.tab.optimize_translate"))
+        self._combined_scroll = scroll
+
+    def _toggle_combined_grammar_section(self):
+        if self._combined_grammar_container.isVisible():
+            self._combined_grammar_container.hide()
+            self._combined_grammar_header.setText(t("fw.label.grammar_collapsed"))
+        else:
+            self._combined_grammar_container.show()
+            self._combined_grammar_header.setText(t("fw.label.grammar_expanded"))
 
     # ---- Event handlers ----
 
