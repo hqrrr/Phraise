@@ -1430,6 +1430,66 @@ class FloatingWindow(QWidget):
 
         self._combined_pending = 2
 
+        if optimize_model == "harper":
+            self._do_optimize_translate_harper()
+            return
+
+        self._do_optimize_translate_llm()
+
+    def _do_optimize_translate_harper(self):
+        """Run Harper grammar check in parallel with LLM translation."""
+        from .harper_client import HarperClient
+
+        client = HarperClient()
+        if not client.is_available():
+            self._show_toast(t("harper.error.binary_not_found"))
+            self._do_optimize_translate_llm()
+            return
+
+        MAX_HARPER_BYTES = 120 * 1024
+        if len(self._current_text.encode("utf-8")) > MAX_HARPER_BYTES:
+            self._show_toast(t("harper.error.text_too_large"))
+            self._do_optimize_translate_llm()
+            return
+
+        try:
+            prev = getattr(self, '_combined_active_client', None)
+            if prev is not None:
+                try:
+                    prev.finished.disconnect()
+                except Exception:
+                    pass
+            self._combined_active_client = client
+
+            client.finished.connect(
+                lambda result: run_on_main(
+                    lambda r=result: self._on_combined_harper_done(r)
+                )
+            )
+            issues, corrected_text = client.check_text(self._current_text)
+            if issues or corrected_text != self._current_text:
+                sync_result = LintResult(
+                    success=True, issues=issues, corrected_text=corrected_text
+                )
+                self._on_combined_harper_done(sync_result)
+        except Exception:
+            self._show_toast(t("harper.error.process_crash"))
+            self._do_optimize_translate_llm()
+            return
+
+        def on_trans_done(result, error):
+            run_on_main(lambda: self._on_combined_translate_done(result, error))
+
+        translate_text(
+            self._current_text,
+            source_lang=self._combined_source_lang.currentData(),
+            target_lang=self._combined_target_lang.currentData(),
+            model_type=config.get("general", "translate_model", default="model_2"),
+            on_done=on_trans_done,
+        )
+
+    def _do_optimize_translate_llm(self):
+        """Fire LLM optimize + translate in parallel for the combined tab."""
         style_label = FloatingWindow._get_style_label(self._current_style)
 
         def on_opt_done(result, error):
@@ -1454,6 +1514,47 @@ class FloatingWindow(QWidget):
             on_done=on_trans_done,
         )
 
+    def _do_combined_optimize_llm_only(self):
+        """Fire only LLM optimize for the combined tab (used when Harper fails)."""
+        style_label = FloatingWindow._get_style_label(self._current_style)
+
+        def on_opt_done(result, error):
+            run_on_main(lambda: self._on_combined_optimize_done(result, error))
+
+        optimize_text(
+            self._current_text,
+            style=self._current_style,
+            style_label=style_label,
+            model_type=config.get("general", "optimize_model", default="model_1"),
+            on_done=on_opt_done,
+        )
+
+    def _on_combined_harper_done(self, result: LintResult):
+        """Callback for Harper check completion in combined tab."""
+        if not shiboken6.isValid(self):
+            try:
+                _ = self._combined_rewrite_texts
+            except RuntimeError:
+                return
+
+        if not result.success or result.error:
+            if result.error:
+                self._show_toast(result.error)
+            self._do_combined_optimize_llm_only()
+            return
+
+        self._combined_rewrite_texts[0].text_edit.setPlainText(result.corrected_text)
+        self._combined_rewrite_texts[1].text_edit.clear()
+        self._combined_rewrite_texts[2].text_edit.clear()
+        self._combined_rewrite_texts[1].hide()
+        self._combined_rewrite_texts[2].hide()
+        self._populate_combined_grammar_issues(result.issues)
+        self._combined_optimize_loading.hide()
+        self._combined_pending -= 1
+        if self._combined_pending <= 0:
+            self._is_loading = False
+            self._set_loading_state(False)
+
     def _on_combined_optimize_done(self, result, error):
         if not shiboken6.isValid(self):
             try:
@@ -1463,6 +1564,7 @@ class FloatingWindow(QWidget):
         self._combined_optimize_loading.hide()
 
         for hover_edit in self._combined_rewrite_texts:
+            hover_edit.show()
             hover_edit.text_edit.clear()
 
         if error:

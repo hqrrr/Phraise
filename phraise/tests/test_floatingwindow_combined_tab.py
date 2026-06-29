@@ -21,6 +21,8 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QTextEdit
 
 from phraise.floating_window import FloatingWindow, NoScrollComboBox, _HoverTextEdit
+from phraise.harper_client import LintResult
+from phraise.harper_types import HarperIssue
 from phraise.i18n import t
 
 
@@ -517,6 +519,170 @@ class TestCombinedParallel(unittest.TestCase):
 
         mock_opt.assert_not_called()
         mock_trans.assert_not_called()
+
+
+
+class TestCombinedHarper(unittest.TestCase):
+    """Verify Harper optimize + LLM translate parallel path in combined tab."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._app = _qapp()
+
+    def setUp(self) -> None:
+        for attr in ("_rewrite_texts", "_translation_text", "_combined_rewrite_texts",
+                      "_combined_translation_text"):
+            try:
+                delattr(FloatingWindow, attr)
+            except AttributeError:
+                pass
+
+    def _make_fw(self, optimize_model="harper", translate_model="model_2"):
+        """Create FloatingWindow with optimize_model set to Harper by default."""
+        def custom_config_get(*keys, default=None):
+            key = tuple(keys)
+            if key == ("general", "optimize_model"):
+                return optimize_model
+            if key == ("general", "translate_model"):
+                return translate_model
+            if key == ("translation", "source_lang"):
+                return "auto"
+            if key == ("translation", "target_lang"):
+                return "zh-CN"
+            return _mock_config_get(*keys, default=default)
+
+        grabber = MagicMock()
+        with (
+            patch("phraise.floating_window.add_listener", return_value=None),
+            patch("phraise.floating_window.config.update_section", return_value=None),
+            patch("phraise.i18n.add_listener", return_value=None),
+            patch("phraise.floating_window.config.get", side_effect=custom_config_get),
+            patch("phraise.floating_window.check_output_fit", return_value=(True, 100, 4096, "")),
+            patch("phraise.floating_window.run_on_main", side_effect=lambda fn: fn()),
+        ):
+            fw = FloatingWindow(grabber, on_close=MagicMock())
+        return fw
+
+    def _set_text_and_style(self, fw, text="Hello world", style="concise"):
+        fw._current_text = text
+        fw._current_style = style
+
+    def _config_get(self, optimize_model="harper", translate_model="model_2"):
+        """Build a config.get side effect for combined Harper tests."""
+        def fn(*keys, default=None):
+            key = tuple(keys)
+            if key == ("general", "optimize_model"):
+                return optimize_model
+            if key == ("general", "translate_model"):
+                return translate_model
+            if key == ("translation", "source_lang"):
+                return "auto"
+            if key == ("translation", "target_lang"):
+                return "zh-CN"
+            return _mock_config_get(*keys, default=default)
+        return fn
+
+    def test_harper_success_and_translation_success(self):
+        """Harper succeeds in parallel with translation → corrected text + grammar + translation."""
+        fw = self._make_fw()
+        self._set_text_and_style(fw)
+        issue = HarperIssue(
+            original="world", suggestion="earth", reason="test reason", severity="warning"
+        )
+        corrected = "Hello earth"
+
+        def mock_check_text(text):
+            return [issue], corrected
+
+        def mock_translate(original_text, source_lang, target_lang, model_type, on_done):
+            on_done({"translation": "你好世界"}, None)
+
+        with (
+            patch("phraise.floating_window.config.get", side_effect=self._config_get()),
+            patch("phraise.floating_window.check_output_fit", return_value=(True, 100, 4096, "")),
+            patch("phraise.harper_client.HarperClient") as MockClient,
+            patch("phraise.floating_window.translate_text", side_effect=mock_translate),
+            patch("phraise.floating_window.optimize_text") as mock_optimize,
+            patch.object(fw, "_show_toast") as mock_toast,
+        ):
+            client = MockClient.return_value
+            client.is_available.return_value = True
+            client.check_text.side_effect = mock_check_text
+            fw._do_optimize_translate()
+
+        mock_optimize.assert_not_called()
+        mock_toast.assert_not_called()
+        self.assertEqual(fw._combined_rewrite_texts[0].text_edit.toPlainText(), corrected)
+        self.assertTrue(fw._combined_rewrite_texts[1].isHidden())
+        self.assertTrue(fw._combined_rewrite_texts[2].isHidden())
+        self.assertEqual(fw._combined_translation_text.toPlainText(), "你好世界")
+        self.assertTrue(fw._combined_optimize_loading.isHidden())
+        self.assertTrue(fw._combined_translate_loading.isHidden())
+        self.assertFalse(fw._is_loading)
+        self.assertEqual(fw._combined_grammar_layout.count(), 1)
+
+    def test_harper_unavailable_falls_back_to_llm_optimize(self):
+        """Harper unavailable → toast + LLM optimize + LLM translate fallback."""
+        fw = self._make_fw()
+        self._set_text_and_style(fw)
+
+        def mock_optimize(original_text, style, style_label, model_type, on_done):
+            on_done({"rewrites": [{"text": "LLM optimized"}], "grammar_issues": []}, None)
+
+        def mock_translate(original_text, source_lang, target_lang, model_type, on_done):
+            on_done({"translation": "translated"}, None)
+
+        with (
+            patch("phraise.floating_window.config.get", side_effect=self._config_get()),
+            patch("phraise.floating_window.check_output_fit", return_value=(True, 100, 4096, "")),
+            patch("phraise.harper_client.HarperClient") as MockClient,
+            patch("phraise.floating_window.translate_text", side_effect=mock_translate),
+            patch("phraise.floating_window.optimize_text", side_effect=mock_optimize),
+            patch.object(fw, "_show_toast") as mock_toast,
+        ):
+            client = MockClient.return_value
+            client.is_available.return_value = False
+            expected_toast = t("harper.error.binary_not_found")
+            fw._do_optimize_translate()
+
+        client.check_text.assert_not_called()
+        mock_toast.assert_called_once_with(expected_toast)
+        self.assertEqual(fw._combined_rewrite_texts[0].text_edit.toPlainText(), "LLM optimized")
+        self.assertEqual(fw._combined_translation_text.toPlainText(), "translated")
+        self.assertFalse(fw._is_loading)
+
+    def test_harper_failure_falls_back_to_llm_optimize(self):
+        """Harper raises an exception → toast + LLM optimize + LLM translate fallback."""
+        fw = self._make_fw()
+        self._set_text_and_style(fw)
+
+        def mock_check_text(text):
+            raise RuntimeError("harper crashed")
+
+        def mock_optimize(original_text, style, style_label, model_type, on_done):
+            on_done({"rewrites": [{"text": "Fallback optimized"}], "grammar_issues": []}, None)
+
+        def mock_translate(original_text, source_lang, target_lang, model_type, on_done):
+            on_done({"translation": "fallback translated"}, None)
+
+        with (
+            patch("phraise.floating_window.config.get", side_effect=self._config_get()),
+            patch("phraise.floating_window.check_output_fit", return_value=(True, 100, 4096, "")),
+            patch("phraise.harper_client.HarperClient") as MockClient,
+            patch("phraise.floating_window.translate_text", side_effect=mock_translate),
+            patch("phraise.floating_window.optimize_text", side_effect=mock_optimize),
+            patch.object(fw, "_show_toast") as mock_toast,
+        ):
+            client = MockClient.return_value
+            client.is_available.return_value = True
+            client.check_text.side_effect = mock_check_text
+            expected_toast = t("harper.error.process_crash")
+            fw._do_optimize_translate()
+
+        mock_toast.assert_called_once_with(expected_toast)
+        self.assertEqual(fw._combined_rewrite_texts[0].text_edit.toPlainText(), "Fallback optimized")
+        self.assertEqual(fw._combined_translation_text.toPlainText(), "fallback translated")
+        self.assertFalse(fw._is_loading)
 
 
 if __name__ == "__main__":
