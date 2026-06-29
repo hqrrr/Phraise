@@ -333,6 +333,63 @@ class TestCombinedTabUI(unittest.TestCase):
         fw._on_tab_changed(0)
         self.assertTrue(fw._model_combo.isVisible())
 
+    # ------------------------------------------------------------------
+    # Language switch propagation
+    # ------------------------------------------------------------------
+
+    def test_language_switch(self):
+        """_retranslate_ui must update combined tab labels to Chinese."""
+        fw = self._make_fw()
+
+        cn_translations = {
+            "fw.tab.optimize_translate": "优化+翻译",
+            "fw.label.optimize_section": "优化结果：",
+            "fw.label.translate_section": "翻译结果：",
+            "fw.label.style": "风格：",
+            "fw.label.grammar_expanded": "语法检查 ▼",
+            "fw.label.rewrites": "改写版本：",
+            "fw.label.source_lang": "源语言：",
+            "fw.label.target_lang": "目标语言：",
+            "fw.label.translation_result": "翻译结果：",
+            "fw.btn.replace_original": "替换原文",
+            "fw.btn.copy": "复制",
+        }
+
+        def mock_t(key, **kwargs):
+            return cn_translations.get(key, key)
+
+        with patch("phraise.floating_window.t", side_effect=mock_t):
+            fw._retranslate_ui()
+
+        self.assertEqual(fw._tabs.tabText(2), "优化+翻译")
+        self.assertEqual(fw._combined_optimize_label.text(), "优化结果：")
+        self.assertEqual(fw._combined_translate_label.text(), "翻译结果：")
+        self.assertEqual(fw._combined_style_label.text(), "风格：")
+        self.assertEqual(fw._combined_rewrite_label.text(), "改写版本：")
+        self.assertEqual(fw._combined_source_lang_label.text(), "源语言：")
+        self.assertEqual(fw._combined_target_lang_label.text(), "目标语言：")
+        self.assertEqual(fw._combined_translation_result_label.text(), "翻译结果：")
+        self.assertEqual(fw._combined_trans_replace_btn.text(), "替换原文")
+        self.assertEqual(fw._combined_trans_copy_btn.text(), "复制")
+
+    # ------------------------------------------------------------------
+    # Theme switch propagation
+    # ------------------------------------------------------------------
+
+    def test_theme_switch(self):
+        """_apply_theme must apply non-empty stylesheets to combined tab widgets."""
+        fw = self._make_fw()
+        fw._apply_theme("catppuccin_mocha")
+
+        self.assertNotEqual(fw._combined_scroll.styleSheet(), "")
+        self.assertNotEqual(fw._combined_source_lang.styleSheet(), "")
+        self.assertNotEqual(fw._combined_target_lang.styleSheet(), "")
+        self.assertNotEqual(fw._combined_translation_text.styleSheet(), "")
+        self.assertNotEqual(fw._combined_trans_replace_btn.styleSheet(), "")
+        self.assertNotEqual(fw._combined_trans_copy_btn.styleSheet(), "")
+        self.assertNotEqual(fw._combined_optimize_label.styleSheet(), "")
+        self.assertNotEqual(fw._combined_translate_label.styleSheet(), "")
+
 
 class TestCombinedParallel(unittest.TestCase):
     """Verify parallel optimize + translate execution in the combined tab."""

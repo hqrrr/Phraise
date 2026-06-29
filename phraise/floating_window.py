@@ -657,11 +657,11 @@ class FloatingWindow(QWidget):
         optimize_header_row = QWidget()
         optimize_header_layout = QHBoxLayout(optimize_header_row)
         optimize_header_layout.setContentsMargins(0, 0, 0, 0)
-        optimize_section_label = QLabel(t("fw.label.optimize_section"))
-        optimize_section_label.setStyleSheet(
+        self._combined_optimize_label = QLabel(t("fw.label.optimize_section"))
+        self._combined_optimize_label.setStyleSheet(
             label_style(self._theme_colors, "text", "font-size: 13px; font-weight: 600;")
         )
-        optimize_header_layout.addWidget(optimize_section_label)
+        optimize_header_layout.addWidget(self._combined_optimize_label)
         self._combined_optimize_loading = QLabel()
         self._combined_optimize_loading.setPixmap(
             qta.icon("fa5s.spinner", color=self._theme_colors["yellow"]).pixmap(QSize(16, 16))
@@ -737,11 +737,11 @@ class FloatingWindow(QWidget):
         translate_header_row = QWidget()
         translate_header_layout = QHBoxLayout(translate_header_row)
         translate_header_layout.setContentsMargins(0, 0, 0, 0)
-        translate_section_label = QLabel(t("fw.label.translate_section"))
-        translate_section_label.setStyleSheet(
+        self._combined_translate_label = QLabel(t("fw.label.translate_section"))
+        self._combined_translate_label.setStyleSheet(
             label_style(self._theme_colors, "text", "font-size: 13px; font-weight: 600;")
         )
-        translate_header_layout.addWidget(translate_section_label)
+        translate_header_layout.addWidget(self._combined_translate_label)
         self._combined_translate_loading = QLabel()
         self._combined_translate_loading.setPixmap(
             qta.icon("fa5s.spinner", color=self._theme_colors["yellow"]).pixmap(QSize(16, 16))
@@ -1782,6 +1782,37 @@ class FloatingWindow(QWidget):
                     self._model_combo.setCurrentIndex(idx)
             self._model_combo.blockSignals(False)
 
+        # Retranslate combined tab widgets
+        if hasattr(self, '_combined_optimize_label'):
+            self._combined_optimize_label.setText(t("fw.label.optimize_section"))
+        if hasattr(self, '_combined_translate_label'):
+            self._combined_translate_label.setText(t("fw.label.translate_section"))
+        if hasattr(self, '_combined_style_label'):
+            self._combined_style_label.setText(t("fw.label.style"))
+        if hasattr(self, '_combined_style_buttons'):
+            styles = config.get("styles", default=[])
+            style_by_id = {s["id"]: s for s in styles}
+            for sid, btn in self._combined_style_buttons.items():
+                label = t(f"style.{sid}")
+                if label == f"style.{sid}":
+                    s = style_by_id.get(sid, {})
+                    label = s.get("label", sid)
+                btn.setText(label)
+        if hasattr(self, '_combined_grammar_header'):
+            self._combined_grammar_header.setText(t("fw.label.grammar_expanded"))
+        if hasattr(self, '_combined_rewrite_label'):
+            self._combined_rewrite_label.setText(t("fw.label.rewrites"))
+        if hasattr(self, '_combined_source_lang_label'):
+            self._combined_source_lang_label.setText(t("fw.label.source_lang"))
+        if hasattr(self, '_combined_target_lang_label'):
+            self._combined_target_lang_label.setText(t("fw.label.target_lang"))
+        if hasattr(self, '_combined_translation_result_label'):
+            self._combined_translation_result_label.setText(t("fw.label.translation_result"))
+        if hasattr(self, '_combined_trans_replace_btn'):
+            self._combined_trans_replace_btn.setText(t("fw.btn.replace_original"))
+        if hasattr(self, '_combined_trans_copy_btn'):
+            self._combined_trans_copy_btn.setText(t("fw.btn.copy"))
+
     def _apply_theme(self, name: str):
         tc = get_theme(name)["colors"]
         self._theme_colors = tc
@@ -1820,6 +1851,51 @@ class FloatingWindow(QWidget):
         self._translation_text.setStyleSheet(text_edit_style(tc))
         self._trans_replace_btn.setStyleSheet(action_btn_style(tc, "accent"))
         self._trans_copy_btn.setStyleSheet(action_btn_style(tc, "surface"))
+
+        # Style combined tab widgets
+        if hasattr(self, '_combined_scroll') and self._combined_scroll is not None:
+            self._combined_scroll.setStyleSheet(scroll_area_style(tc))
+        if hasattr(self, '_combined_optimize_label') and self._combined_optimize_label is not None:
+            self._combined_optimize_label.setStyleSheet(
+                label_style(tc, "text", "font-size: 13px; font-weight: 600;"))
+        if hasattr(self, '_combined_translate_label') and self._combined_translate_label is not None:
+            self._combined_translate_label.setStyleSheet(
+                label_style(tc, "text", "font-size: 13px; font-weight: 600;"))
+        if hasattr(self, '_combined_style_label') and self._combined_style_label is not None:
+            self._combined_style_label.setStyleSheet(
+                label_style(tc, "text_muted", "font-size: 12px; font-weight: 500;"))
+        if hasattr(self, '_combined_style_buttons'):
+            active_sid = self._current_style
+            for sid, btn in self._combined_style_buttons.items():
+                btn.setStyleSheet(style_btn_style(tc, sid == active_sid))
+        if hasattr(self, '_combined_grammar_header') and self._combined_grammar_header is not None:
+            self._combined_grammar_header.setStyleSheet(
+                label_style(tc, "text_muted", "font-size: 13px; font-weight: 600; margin-top: 6px;"))
+        if hasattr(self, '_combined_rewrite_label') and self._combined_rewrite_label is not None:
+            self._combined_rewrite_label.setStyleSheet(
+                label_style(tc, "text_muted", "font-size: 12px; font-weight: 500;"))
+        if hasattr(self, '_combined_rewrite_texts'):
+            for he in self._combined_rewrite_texts:
+                he.update_theme(tc)
+        if hasattr(self, '_combined_source_lang') and self._combined_source_lang is not None:
+            self._combined_source_lang.setStyleSheet(combo_style(tc))
+        if hasattr(self, '_combined_target_lang') and self._combined_target_lang is not None:
+            self._combined_target_lang.setStyleSheet(combo_style(tc))
+        if hasattr(self, '_combined_translation_text') and self._combined_translation_text is not None:
+            self._combined_translation_text.setStyleSheet(text_edit_style(tc))
+        if hasattr(self, '_combined_trans_replace_btn') and self._combined_trans_replace_btn is not None:
+            self._combined_trans_replace_btn.setStyleSheet(action_btn_style(tc, "accent"))
+        if hasattr(self, '_combined_trans_copy_btn') and self._combined_trans_copy_btn is not None:
+            self._combined_trans_copy_btn.setStyleSheet(action_btn_style(tc, "surface"))
+        if hasattr(self, '_combined_source_lang_label') and self._combined_source_lang_label is not None:
+            self._combined_source_lang_label.setStyleSheet(
+                label_style(tc, "text_muted", "font-size: 12px; font-weight: 500;"))
+        if hasattr(self, '_combined_target_lang_label') and self._combined_target_lang_label is not None:
+            self._combined_target_lang_label.setStyleSheet(
+                label_style(tc, "text_muted", "font-size: 12px; font-weight: 500;"))
+        if hasattr(self, '_combined_translation_result_label') and self._combined_translation_result_label is not None:
+            self._combined_translation_result_label.setStyleSheet(
+                label_style(tc, "text_muted", "font-size: 12px; font-weight: 500;"))
 
         self._loading_overlay.setStyleSheet(
             f"background: {rgba(tc['bg'], 200)}; border-radius: 8px;")
