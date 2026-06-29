@@ -812,5 +812,298 @@ class TestCombinedHarper(unittest.TestCase):
         self.assertFalse(fw._is_loading)
 
 
+
+
+def _model_config_get(optimize_model="model_1", translate_model="model_2"):
+    """Return a config.get side effect with configured optimize/translate models."""
+    def fn(*keys, default=None):
+        key = tuple(keys)
+        if key == ("general", "optimize_model"):
+            return optimize_model
+        if key == ("general", "translate_model"):
+            return translate_model
+        if key == ("translation", "source_lang"):
+            return "auto"
+        if key == ("translation", "target_lang"):
+            return "zh-CN"
+        return _mock_config_get(*keys, default=default)
+    return fn
+
+
+def _make_floating_window_with_models(optimize_model="model_1", translate_model="model_2"):
+    """Create a FloatingWindow with mocked listeners and model config."""
+    grabber = MagicMock()
+    with (
+        patch("phraise.floating_window.add_listener", return_value=None),
+        patch("phraise.floating_window.config.update_section", return_value=None),
+        patch("phraise.i18n.add_listener", return_value=None),
+        patch("phraise.floating_window.config.get", side_effect=_model_config_get(optimize_model, translate_model)),
+        patch("phraise.floating_window.check_output_fit", return_value=(True, 100, 4096, "")),
+        patch("phraise.floating_window.run_on_main", side_effect=lambda fn: fn()),
+    ):
+        return FloatingWindow(grabber, on_close=MagicMock())
+
+
+class TestCombinedIntegration(unittest.TestCase):
+    """End-to-end combined tab flow through load_text() and regenerate."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._app = _qapp()
+
+    def setUp(self) -> None:
+        for attr in ("_rewrite_texts", "_translation_text", "_combined_rewrite_texts",
+                      "_combined_translation_text"):
+            try:
+                delattr(FloatingWindow, attr)
+            except AttributeError:
+                pass
+
+    def _make_fw(self) -> FloatingWindow:
+        """Create a FloatingWindow with both models configured."""
+        return _make_floating_window_with_models()
+
+    def _success_opt_result(self):
+        return {
+            "rewrites": [
+                {"text": "Version A"},
+                {"text": "Version B"},
+                {"text": "Version C"},
+            ],
+            "grammar_issues": [],
+        }
+
+    def _success_trans_result(self):
+        return {"translation": "translated"}
+
+    def test_full_flow_both_succeed(self):
+        """load_text optimize_translate → both calls succeed → results + regenerate re-runs."""
+        fw = self._make_fw()
+        opt_result = self._success_opt_result()
+        trans_result = self._success_trans_result()
+        opt_calls = 0
+        trans_calls = 0
+
+        def mock_opt(original_text, style, style_label, model_type, on_done):
+            nonlocal opt_calls
+            opt_calls += 1
+            on_done(opt_result, None)
+
+        def mock_trans(original_text, source_lang, target_lang, model_type, on_done):
+            nonlocal trans_calls
+            trans_calls += 1
+            on_done(trans_result, None)
+
+        with (
+            patch("phraise.floating_window.optimize_text", side_effect=mock_opt),
+            patch("phraise.floating_window.translate_text", side_effect=mock_trans),
+            patch("phraise.floating_window.check_output_fit", return_value=(True, 100, 4096, "")),
+            patch("phraise.floating_window.config.get", side_effect=_model_config_get()),
+        ):
+            fw.load_text("source", "optimize_translate")
+
+        self.assertEqual(fw._tabs.currentIndex(), 2)
+        self.assertEqual(fw._current_mode, "optimize_translate")
+        self.assertEqual(opt_calls, 1)
+        self.assertEqual(trans_calls, 1)
+        self.assertFalse(fw._is_loading)
+        self.assertEqual(
+            fw._combined_rewrite_texts[0].text_edit.toPlainText(), "Version A")
+        self.assertEqual(
+            fw._combined_rewrite_texts[1].text_edit.toPlainText(), "Version B")
+        self.assertEqual(
+            fw._combined_rewrite_texts[2].text_edit.toPlainText(), "Version C")
+        self.assertEqual(
+            fw._combined_translation_text.toPlainText(), "translated")
+
+        with (
+            patch("phraise.floating_window.optimize_text", side_effect=mock_opt),
+            patch("phraise.floating_window.translate_text", side_effect=mock_trans),
+            patch("phraise.floating_window.check_output_fit", return_value=(True, 100, 4096, "")),
+            patch("phraise.floating_window.config.get", side_effect=_model_config_get()),
+        ):
+            fw._on_regenerate()
+
+        self.assertEqual(opt_calls, 2)
+        self.assertEqual(trans_calls, 2)
+        self.assertFalse(fw._is_loading)
+
+    def test_full_flow_partial_failure_then_regenerate(self):
+        """First run optimize fails + translate succeeds; regenerate with both succeed."""
+        fw = self._make_fw()
+        opt_result = self._success_opt_result()
+        trans_result = self._success_trans_result()
+        opt_calls = 0
+        trans_calls = 0
+
+        def mock_opt(original_text, style, style_label, model_type, on_done):
+            nonlocal opt_calls
+            opt_calls += 1
+            if opt_calls == 1:
+                on_done(None, "Optimize API error")
+            else:
+                on_done(opt_result, None)
+
+        def mock_trans(original_text, source_lang, target_lang, model_type, on_done):
+            nonlocal trans_calls
+            trans_calls += 1
+            on_done(trans_result, None)
+
+        with (
+            patch("phraise.floating_window.optimize_text", side_effect=mock_opt),
+            patch("phraise.floating_window.translate_text", side_effect=mock_trans),
+            patch("phraise.floating_window.check_output_fit", return_value=(True, 100, 4096, "")),
+            patch("phraise.floating_window.config.get", side_effect=_model_config_get()),
+        ):
+            fw.load_text("source", "optimize_translate")
+
+        self.assertEqual(fw._tabs.currentIndex(), 2)
+        self.assertEqual(opt_calls, 1)
+        self.assertEqual(trans_calls, 1)
+        self.assertFalse(fw._is_loading)
+        self.assertEqual(
+            fw._combined_rewrite_texts[0].text_edit.toPlainText(), "Optimize API error")
+        self.assertEqual(
+            fw._combined_translation_text.toPlainText(), "translated")
+
+        with (
+            patch("phraise.floating_window.optimize_text", side_effect=mock_opt),
+            patch("phraise.floating_window.translate_text", side_effect=mock_trans),
+            patch("phraise.floating_window.check_output_fit", return_value=(True, 100, 4096, "")),
+            patch("phraise.floating_window.config.get", side_effect=_model_config_get()),
+        ):
+            fw._on_regenerate()
+
+        self.assertEqual(opt_calls, 2)
+        self.assertEqual(trans_calls, 2)
+        self.assertFalse(fw._is_loading)
+        self.assertEqual(
+            fw._combined_rewrite_texts[0].text_edit.toPlainText(), "Version A")
+        self.assertEqual(
+            fw._combined_rewrite_texts[1].text_edit.toPlainText(), "Version B")
+        self.assertEqual(
+            fw._combined_rewrite_texts[2].text_edit.toPlainText(), "Version C")
+        self.assertEqual(
+            fw._combined_translation_text.toPlainText(), "translated")
+
+
+class TestCombinedRegression(unittest.TestCase):
+    """Regression tests guarding existing Optimize, Translate, Harper, and theme behavior."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._app = _qapp()
+
+    def setUp(self) -> None:
+        for attr in ("_rewrite_texts", "_translation_text", "_combined_rewrite_texts",
+                      "_combined_translation_text"):
+            try:
+                delattr(FloatingWindow, attr)
+            except AttributeError:
+                pass
+
+    def _make_fw(self, optimize_model="model_1", translate_model="model_2") -> FloatingWindow:
+        """Create a FloatingWindow with configurable model assignments."""
+        return _make_floating_window_with_models(optimize_model, translate_model)
+
+    def test_optimize_tab_regression(self):
+        """Switch to optimize tab and verify three rewrites are displayed."""
+        fw = self._make_fw()
+        opt_result = {
+            "rewrites": [
+                {"text": "Rewrite 1"},
+                {"text": "Rewrite 2"},
+                {"text": "Rewrite 3"},
+            ],
+            "grammar_issues": [],
+        }
+
+        def mock_opt(original_text, style, style_label, model_type, on_done):
+            on_done(opt_result, None)
+
+        with (
+            patch("phraise.floating_window.optimize_text", side_effect=mock_opt),
+            patch("phraise.floating_window.check_output_fit", return_value=(True, 100, 4096, "")),
+            patch("phraise.floating_window.config.get", side_effect=_model_config_get()),
+        ):
+            fw.load_text("Hello world", "optimize")
+
+        self.assertEqual(fw._tabs.currentIndex(), 0)
+        self.assertEqual(fw._current_mode, "optimize")
+        self.assertEqual(fw._rewrite_texts[0].text_edit.toPlainText(), "Rewrite 1")
+        self.assertEqual(fw._rewrite_texts[1].text_edit.toPlainText(), "Rewrite 2")
+        self.assertEqual(fw._rewrite_texts[2].text_edit.toPlainText(), "Rewrite 3")
+
+    def test_translate_tab_regression(self):
+        """Switch to translate tab and verify translation is displayed."""
+        fw = self._make_fw()
+
+        def mock_trans(original_text, source_lang, target_lang, model_type, on_done):
+            on_done({"translation": "Hola mundo"}, None)
+
+        with (
+            patch("phraise.floating_window.translate_text", side_effect=mock_trans),
+            patch("phraise.floating_window.check_output_fit", return_value=(True, 100, 4096, "")),
+            patch("phraise.floating_window.config.get", side_effect=_model_config_get()),
+        ):
+            fw.load_text("Hello world", "translate")
+
+        self.assertEqual(fw._tabs.currentIndex(), 1)
+        self.assertEqual(fw._current_mode, "translate")
+        self.assertEqual(fw._translation_text.toPlainText(), "Hola mundo")
+
+    def test_harper_optimize_tab_regression(self):
+        """Optimize tab with optimize_model='harper' shows corrected text + grammar issues."""
+        fw = self._make_fw(optimize_model="harper", translate_model="model_2")
+        issue = HarperIssue(
+            original="world", suggestion="earth", reason="test reason", severity="warning"
+        )
+        corrected = "Hello earth"
+
+        def mock_check_text(text):
+            return [issue], corrected
+
+        with (
+            patch("phraise.harper_client.HarperClient") as MockClient,
+            patch("phraise.floating_window.config.get", side_effect=_model_config_get("harper", "model_2")),
+        ):
+            client = MockClient.return_value
+            client.is_available.return_value = True
+            client.check_text.side_effect = mock_check_text
+            fw.load_text("Hello world", "optimize")
+
+        self.assertEqual(fw._tabs.currentIndex(), 0)
+        self.assertEqual(fw._current_mode, "optimize")
+        self.assertEqual(fw._rewrite_texts[0].text_edit.toPlainText(), corrected)
+        self.assertEqual(fw._grammar_layout.count(), 1)
+
+    def test_theme_regression_existing_and_combined_widgets(self):
+        """Switching theme updates stylesheets on existing and combined tab widgets."""
+        fw = self._make_fw()
+        fw._apply_theme("catppuccin_mocha")
+
+        self.assertNotEqual(fw._optimize_scroll.styleSheet(), "")
+        self.assertNotEqual(fw._rewrite_texts[0].text_edit.styleSheet(), "")
+        self.assertNotEqual(fw._custom_entry.styleSheet(), "")
+        self.assertNotEqual(fw._custom_btn.styleSheet(), "")
+        self.assertNotEqual(fw._style_buttons["concise"].styleSheet(), "")
+
+        self.assertNotEqual(fw._translate_scroll.styleSheet(), "")
+        self.assertNotEqual(fw._source_lang.styleSheet(), "")
+        self.assertNotEqual(fw._target_lang.styleSheet(), "")
+        self.assertNotEqual(fw._translation_text.styleSheet(), "")
+        self.assertNotEqual(fw._trans_replace_btn.styleSheet(), "")
+        self.assertNotEqual(fw._trans_copy_btn.styleSheet(), "")
+
+        self.assertNotEqual(fw._combined_scroll.styleSheet(), "")
+        self.assertNotEqual(fw._combined_rewrite_texts[0].text_edit.styleSheet(), "")
+        self.assertNotEqual(fw._combined_style_buttons["concise"].styleSheet(), "")
+        self.assertNotEqual(fw._combined_source_lang.styleSheet(), "")
+        self.assertNotEqual(fw._combined_target_lang.styleSheet(), "")
+        self.assertNotEqual(fw._combined_translation_text.styleSheet(), "")
+        self.assertNotEqual(fw._combined_trans_replace_btn.styleSheet(), "")
+        self.assertNotEqual(fw._combined_trans_copy_btn.styleSheet(), "")
+
+
 if __name__ == "__main__":
     unittest.main()
