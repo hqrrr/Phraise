@@ -119,3 +119,54 @@ def test_every_default_style_has_translation_key():
         if key not in TRANSLATIONS:
             missing.append(key)
     assert not missing, f"Missing style translation keys: {missing}"
+
+
+def test_optimize_translate_tab_chinese():
+    """Optimize+Translate tab label resolves in Chinese."""
+    assert t("fw.tab.optimize_translate", lang="zh-CN") == "优化+翻译"
+
+
+def test_optimize_translate_tab_english():
+    """Optimize+Translate tab label resolves in English."""
+    assert t("fw.tab.optimize_translate", lang="en") == "Optimize + Translate"
+
+
+def test_optimize_translate_tab_unknown_language_falls_back():
+    """Optimize+Translate tab label falls back to English for unsupported lang."""
+    assert t("fw.tab.optimize_translate", lang="fr") == "Optimize + Translate"
+
+
+def test_optimize_section_label_chinese():
+    """Optimize section label resolves in Chinese."""
+    assert t("fw.label.optimize_section", lang="zh-CN") == "优化结果："
+
+
+def test_optimize_section_label_english():
+    """Optimize section label resolves in English."""
+    assert t("fw.label.optimize_section", lang="en") == "Optimize:"
+
+
+def test_translate_section_label_chinese():
+    """Translate section label resolves in Chinese."""
+    assert t("fw.label.translate_section", lang="zh-CN") == "翻译结果："
+
+
+def test_translate_section_label_english():
+    """Translate section label resolves in English."""
+    assert t("fw.label.translate_section", lang="en") == "Translate:"
+
+
+def test_combined_no_model_message_chinese():
+    """No-model-configured message resolves in Chinese."""
+    assert (
+        t("fw.label.combined_no_model", lang="zh-CN")
+        == "请在设置中配置优化和翻译模型以使用此标签页。"
+    )
+
+
+def test_combined_no_model_message_english():
+    """No-model-configured message resolves in English."""
+    assert (
+        t("fw.label.combined_no_model", lang="en")
+        == "Configure both Optimize and Translate models in Settings to use this tab."
+    )
