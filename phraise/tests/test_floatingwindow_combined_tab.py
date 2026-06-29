@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QTextEdit
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QSizePolicy, QTextEdit
 
 from phraise.floating_window import FloatingWindow, NoScrollComboBox, _HoverTextEdit
 from phraise.harper_client import LintResult
@@ -260,6 +260,32 @@ class TestCombinedTabUI(unittest.TestCase):
         fw = self._make_fw()
         self.assertIsInstance(fw._combined_trans_replace_btn, QPushButton)
         self.assertIsInstance(fw._combined_trans_copy_btn, QPushButton)
+
+    def test_combined_tab_text_boxes_fill_width_no_horizontal_scrollbar(self):
+        """Combined tab rewrite and translation text boxes expand to fill the viewport width."""
+        fw = self._make_fw()
+        fw.show()
+        fw.resize(350, 500)
+        fw._tabs.setCurrentIndex(2)
+        fw._on_tab_changed(2)
+
+        text = "Hello world " * 20
+        for he in fw._combined_rewrite_texts:
+            he.text_edit.setPlainText(text)
+        fw._combined_translation_text.setPlainText(text)
+        QApplication.processEvents()
+
+        scroll = fw._combined_scroll
+        self.assertFalse(scroll.horizontalScrollBar().isVisible())
+        viewport_width = scroll.viewport().width()
+        for he in fw._combined_rewrite_texts:
+            self.assertEqual(he.text_edit.sizePolicy().horizontalPolicy(), QSizePolicy.Expanding)
+            self.assertEqual(he.sizePolicy().horizontalPolicy(), QSizePolicy.Expanding)
+            self.assertLessEqual(he.width(), viewport_width)
+        self.assertEqual(
+            fw._combined_translation_text.sizePolicy().horizontalPolicy(), QSizePolicy.Expanding
+        )
+        self.assertLessEqual(fw._combined_translation_text.width(), viewport_width)
 
     def test_combined_tab_has_no_custom_instruction_widget(self):
         """Combined tab must omit the custom instruction entry used in the optimize tab."""
@@ -703,7 +729,7 @@ class TestCombinedParallel(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_on_style_change_combined_mode(self):
-        """_on_style_change in combined mode updates both style button groups and reruns combined flow."""
+        """_on_style_change in combined mode updates style buttons and re-runs optimize only."""
         fw = self._make_fw()
         fw._current_text = "hello"
         fw._current_mode = "optimize_translate"
@@ -712,16 +738,82 @@ class TestCombinedParallel(unittest.TestCase):
         with (
             patch("phraise.floating_window.config.set") as mock_config_set,
             patch("phraise.floating_window.style_btn_style", return_value="styled") as mock_style,
-            patch.object(fw, "_do_optimize_translate") as mock_combined,
+            patch.object(fw, "_redo_optimize_for_combined") as mock_redo,
         ):
             fw._on_style_change("concise")
 
         self.assertEqual(fw._current_style, "concise")
         mock_config_set.assert_called_once_with("floating_window", "last_style", value="concise")
-        mock_combined.assert_called_once()
+        mock_redo.assert_called_once()
         normal_calls = [c for c in mock_style.call_args_list if c.args[0] is fw._theme_colors]
         self.assertEqual(len(normal_calls), 2)
         self.assertTrue(all(c.args[1] is True for c in normal_calls))
+
+    def test_redo_optimize_for_combined_only_runs_optimize(self):
+        """_redo_optimize_for_combined runs optimize_text, preserves existing translation."""
+        fw = self._make_fw()
+        self._set_text_and_style(fw)
+        fw._combined_translation_text.setPlainText("keep me")
+
+        def mock_opt(original_text, style, style_label, model_type, on_done):
+            on_done({"rewrites": [{"text": "rewritten"}], "grammar_issues": []}, None)
+
+        def mock_trans(original_text, source_lang, target_lang, model_type, on_done):
+            on_done({"translation": "should not appear"}, None)
+
+        with (
+            patch("phraise.floating_window.optimize_text", side_effect=mock_opt) as mock_optimize,
+            patch("phraise.floating_window.translate_text", side_effect=mock_trans) as mock_translate,
+            patch("phraise.floating_window.check_output_fit", return_value=(True, 100, 4096, "")),
+        ):
+            fw._redo_optimize_for_combined()
+
+        mock_optimize.assert_called_once()
+        mock_translate.assert_not_called()
+        self.assertEqual(fw._combined_rewrite_texts[0].text_edit.toPlainText(), "rewritten")
+        self.assertEqual(fw._combined_translation_text.toPlainText(), "keep me")
+        self.assertFalse(fw._is_loading)
+        self.assertTrue(fw._combined_optimize_loading.isHidden())
+
+    def test_redo_optimize_for_combined_harper_only(self):
+        """_redo_optimize_for_combined with Harper runs only Harper optimize, preserves translation."""
+        fw = self._make_fw(optimize_model="harper", translate_model="model_2")
+        self._set_text_and_style(fw)
+        fw._combined_translation_text.setPlainText("keep me")
+
+        def mock_check_text(text):
+            return [], "corrected"
+
+        def cfg_get(*keys, default=None):
+            key = tuple(keys)
+            if key == ("general", "optimize_model"):
+                return "harper"
+            if key == ("general", "translate_model"):
+                return "model_2"
+            if key == ("translation", "source_lang"):
+                return "auto"
+            if key == ("translation", "target_lang"):
+                return "zh-CN"
+            return _mock_config_get(*keys, default=default)
+
+        with (
+            patch("phraise.floating_window.config.get", side_effect=cfg_get),
+            patch("phraise.harper_client.HarperClient") as MockClient,
+            patch("phraise.floating_window.translate_text") as mock_translate,
+            patch("phraise.floating_window.check_output_fit", return_value=(True, 100, 4096, "")),
+        ):
+            client = MockClient.return_value
+            client.is_available.return_value = True
+            client.check_text.side_effect = mock_check_text
+            fw._redo_optimize_for_combined()
+
+        mock_translate.assert_not_called()
+        self.assertEqual(fw._combined_rewrite_texts[0].text_edit.toPlainText(), "corrected")
+        self.assertTrue(fw._combined_rewrite_texts[1].isHidden())
+        self.assertTrue(fw._combined_rewrite_texts[2].isHidden())
+        self.assertEqual(fw._combined_translation_text.toPlainText(), "keep me")
+        self.assertFalse(fw._is_loading)
+        self.assertTrue(fw._combined_optimize_loading.isHidden())
 
 
 

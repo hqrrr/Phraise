@@ -195,6 +195,7 @@ class _HoverTextEdit(QWidget):
         self.text_edit.setMinimumHeight(80)
         self.text_edit.setMaximumHeight(300)
         self.text_edit.setFixedHeight(100)
+        self.text_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.text_edit.setStyleSheet(text_edit_style(theme_colors))
         self.text_edit.setMouseTracking(True)
 
@@ -223,6 +224,7 @@ class _HoverTextEdit(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.text_edit)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
     def enterEvent(self, event):
         self._btn_overlay.show()
@@ -647,6 +649,7 @@ class FloatingWindow(QWidget):
     def _build_optimize_translate_tab(self):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet(scroll_area_style(self._theme_colors))
 
         container = QWidget()
@@ -752,6 +755,7 @@ class FloatingWindow(QWidget):
         layout.addWidget(translate_header_row)
 
         lang_widget = QWidget()
+        lang_widget.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         lang_layout = QHBoxLayout(lang_widget)
         lang_layout.setContentsMargins(0, 0, 0, 0)
         self._combined_source_lang_label = QLabel(t("fw.label.source_lang"))
@@ -1158,7 +1162,7 @@ class FloatingWindow(QWidget):
                 btn.setStyleSheet(style_btn_style(self._theme_colors, sid == style_id))
         if self._current_text:
             if self._current_mode == "optimize_translate":
-                self._do_optimize_translate()
+                self._redo_optimize_for_combined()
             elif self._current_mode == "optimize":
                 self._do_optimize()
 
@@ -1547,6 +1551,84 @@ class FloatingWindow(QWidget):
             model_type=config.get("general", "optimize_model", default="model_1"),
             on_done=on_opt_done,
         )
+
+    def _redo_optimize_for_combined(self):
+        """Re-run only the optimize side of the combined tab (e.g., after a style change)."""
+        if self._is_loading:
+            return
+        self._is_loading = True
+
+        optimize_model = config.get("general", "optimize_model", default="")
+        if not optimize_model:
+            self._show_toast(t("fw.label.combined_no_model"))
+            self._is_loading = False
+            return
+
+        ok, _, _, warning = check_output_fit(
+            self._current_text,
+            model_type=optimize_model,
+            mode="optimize",
+        )
+        if not ok:
+            self._show_toast(warning)
+            self._is_loading = False
+            return
+
+        self._combined_optimize_loading.show()
+        self._regenerate_btn.setIcon(
+            qta.icon("fa5s.spinner", color=self._theme_colors["yellow"])
+        )
+        self._combined_pending = 1
+
+        if optimize_model == "harper":
+            self._redo_optimize_harper_for_combined()
+            return
+
+        self._do_combined_optimize_llm_only()
+
+    def _redo_optimize_harper_for_combined(self):
+        """Run Harper optimize only for the combined tab; translation is preserved."""
+        from .harper_client import HarperClient
+
+        client = HarperClient()
+        if not client.is_available():
+            self._show_toast(t("harper.error.binary_not_found"))
+            self._do_combined_optimize_llm_only()
+            return
+
+        MAX_HARPER_BYTES = 120 * 1024
+        if len(self._current_text.encode("utf-8")) > MAX_HARPER_BYTES:
+            self._show_toast(t("harper.error.text_too_large"))
+            self._do_combined_optimize_llm_only()
+            return
+
+        try:
+            prev = getattr(self, '_combined_active_client', None)
+            if prev is not None:
+                try:
+                    prev.finished.disconnect()
+                except RuntimeError:
+                    pass
+            self._combined_active_client = client
+
+            client.finished.connect(
+                lambda result: run_on_main(
+                    lambda r=result: self._on_combined_harper_done(r)
+                )
+            )
+            issues, corrected_text = client.check_text(self._current_text)
+            if issues or corrected_text != self._current_text:
+                sync_result = LintResult(
+                    success=True, issues=issues, corrected_text=corrected_text
+                )
+                self._on_combined_harper_done(sync_result)
+        except (RuntimeError, OSError, ValueError):
+            self._show_toast(t("harper.error.process_crash"))
+            self._do_combined_optimize_llm_only()
+        except Exception as e:
+            write_error(e, "FloatingWindow._redo_optimize_harper_for_combined")
+            self._show_toast(t("harper.error.process_crash"))
+            self._do_combined_optimize_llm_only()
 
     def _on_combined_harper_done(self, result: LintResult):
         """Callback for Harper check completion in combined tab."""
