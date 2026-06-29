@@ -164,7 +164,7 @@ class PhrAIseApp:
         if window_open:
             mode = self._window.current_mode
         else:
-            mode = "optimize"
+            mode = config.get("floating_window", "last_tab", default="optimize")
 
         if selected:
             self._expand_window(selected, mode)
