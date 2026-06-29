@@ -1116,6 +1116,10 @@ class FloatingWindow(QWidget):
         if not hasattr(self, '_model_combo') or self._model_combo is None:
             return
 
+        if self._current_mode == "optimize_translate":
+            self._model_combo.hide()
+            return
+
         # Hide model combo when in Harper (local) optimize mode
         if self._current_mode == "optimize" and config.get("general", "optimize_model") == "harper":
             self._model_combo.hide()
@@ -1137,6 +1141,8 @@ class FloatingWindow(QWidget):
 
     def _on_model_combo_changed(self, idx):
         if idx < 0:
+            return
+        if self._current_mode == "optimize_translate":
             return
         model_type = self._model_combo.itemData(idx)
         config_key = "optimize_model" if self._current_mode == "optimize" else "translate_model"

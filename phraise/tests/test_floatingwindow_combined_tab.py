@@ -304,6 +304,35 @@ class TestCombinedTabUI(unittest.TestCase):
         self.assertIn("self._on_copy_text(self._combined_translation_text)", source)
         QTest.mouseClick(fw._combined_trans_copy_btn, Qt.MouseButton.LeftButton)
 
+    # ------------------------------------------------------------------
+    # load_text dispatches optimize_translate mode
+    # ------------------------------------------------------------------
+
+    def test_load_text_switches_tab(self):
+        """load_text with optimize_translate switches to tab 2 and calls combined dispatch."""
+        fw = self._make_fw()
+        with patch.object(fw, "_do_optimize_translate") as mock_combined:
+            fw.load_text("hello", "optimize_translate")
+        self.assertEqual(fw._tabs.currentIndex(), 2)
+        self.assertEqual(fw._current_mode, "optimize_translate")
+        mock_combined.assert_called_once()
+
+    def test_model_combo_hidden(self):
+        """Model combo must be hidden when switching to combined tab."""
+        fw = self._make_fw()
+        fw.show()
+        fw._on_tab_changed(2)
+        self.assertFalse(fw._model_combo.isVisible())
+
+    def test_model_combo_reappears(self):
+        """Model combo must reappear when switching back from combined tab."""
+        fw = self._make_fw()
+        fw.show()
+        fw._on_tab_changed(2)
+        self.assertFalse(fw._model_combo.isVisible())
+        fw._on_tab_changed(0)
+        self.assertTrue(fw._model_combo.isVisible())
+
 
 class TestCombinedParallel(unittest.TestCase):
     """Verify parallel optimize + translate execution in the combined tab."""
@@ -519,6 +548,47 @@ class TestCombinedParallel(unittest.TestCase):
 
         mock_opt.assert_not_called()
         mock_trans.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # _on_regenerate dispatches to correct method
+    # ------------------------------------------------------------------
+
+    def test_regenerate(self):
+        """_on_regenerate dispatches based on _current_mode to the correct method."""
+        fw = self._make_fw()
+
+        with (
+            patch.object(fw, "_do_optimize") as mock_opt,
+            patch.object(fw, "_do_translate") as mock_trans,
+            patch.object(fw, "_do_optimize_translate") as mock_combined,
+        ):
+            fw._current_mode = "optimize"
+            fw._on_regenerate()
+            mock_opt.assert_called_once()
+            mock_trans.assert_not_called()
+            mock_combined.assert_not_called()
+
+        with (
+            patch.object(fw, "_do_optimize") as mock_opt,
+            patch.object(fw, "_do_translate") as mock_trans,
+            patch.object(fw, "_do_optimize_translate") as mock_combined,
+        ):
+            fw._current_mode = "translate"
+            fw._on_regenerate()
+            mock_opt.assert_not_called()
+            mock_trans.assert_called_once()
+            mock_combined.assert_not_called()
+
+        with (
+            patch.object(fw, "_do_optimize") as mock_opt,
+            patch.object(fw, "_do_translate") as mock_trans,
+            patch.object(fw, "_do_optimize_translate") as mock_combined,
+        ):
+            fw._current_mode = "optimize_translate"
+            fw._on_regenerate()
+            mock_opt.assert_not_called()
+            mock_trans.assert_not_called()
+            mock_combined.assert_called_once()
 
 
 
