@@ -255,6 +255,8 @@ class _HoverTextEdit(QWidget):
 class FloatingWindow(QWidget):
     """Main floating window with optimize and translate tabs."""
 
+    MODE_INDEX = {"optimize": 0, "translate": 1, "optimize_translate": 2}
+
     def __init__(self, grabber: TextGrabber, on_close: Callable | None = None):
         super().__init__()
         self._theme_colors = get_theme(theme_notifier.current_theme)["colors"]
@@ -339,11 +341,10 @@ class FloatingWindow(QWidget):
         if not text or not text.strip():
             return
         self._current_text = text
+        self._tabs.setCurrentIndex(self.MODE_INDEX[mode])
         if mode == "translate":
-            self._tabs.setCurrentIndex(1)
             self._do_translate()
         else:
-            self._tabs.setCurrentIndex(0)
             self._do_optimize()
         if not self.isVisible():
             self.show()
@@ -797,7 +798,10 @@ class FloatingWindow(QWidget):
     # ---- Tab & style ----
 
     def _on_tab_changed(self, idx):
-        self._current_mode = "optimize" if idx == 0 else "translate"
+        for mode, index in self.MODE_INDEX.items():
+            if index == idx:
+                self._current_mode = mode
+                break
         config.set("floating_window", "last_tab", value=self._current_mode)
         if hasattr(self, '_model_combo') and self._model_combo is not None:
             self._refresh_model_combo()
@@ -1237,6 +1241,8 @@ class FloatingWindow(QWidget):
     def _on_regenerate(self):
         if self._current_mode == "translate":
             self._do_translate()
+        elif self._current_mode == "optimize_translate":
+            self._do_optimize_translate()
         else:
             self._do_optimize()
 
@@ -1312,6 +1318,7 @@ class FloatingWindow(QWidget):
         if hasattr(self, '_tabs'):
             self._tabs.setTabText(0, t("fw.tab.optimize"))
             self._tabs.setTabText(1, t("fw.tab.translate"))
+            self._tabs.setTabText(2, t("fw.tab.optimize_translate"))
         if hasattr(self, '_style_label'):
             self._style_label.setText(t("fw.label.style"))
         if hasattr(self, '_style_buttons'):
