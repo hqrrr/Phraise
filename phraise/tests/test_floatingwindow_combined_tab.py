@@ -303,5 +303,221 @@ class TestCombinedTabUI(unittest.TestCase):
         QTest.mouseClick(fw._combined_trans_copy_btn, Qt.MouseButton.LeftButton)
 
 
+class TestCombinedParallel(unittest.TestCase):
+    """Verify parallel optimize + translate execution in the combined tab."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._app = _qapp()
+
+    def setUp(self) -> None:
+        for attr in ("_rewrite_texts", "_translation_text", "_combined_rewrite_texts",
+                      "_combined_translation_text"):
+            try:
+                delattr(FloatingWindow, attr)
+            except AttributeError:
+                pass
+
+    def _make_fw(self, optimize_model="model_1", translate_model="model_2"):
+        """Create FloatingWindow with mocked config and LLM calls."""
+        def custom_config_get(*keys, default=None):
+            key = tuple(keys)
+            if key == ("general", "optimize_model"):
+                return optimize_model
+            if key == ("general", "translate_model"):
+                return translate_model
+            if key == ("translation", "source_lang"):
+                return "auto"
+            if key == ("translation", "target_lang"):
+                return "zh-CN"
+            return _mock_config_get(*keys, default=default)
+
+        grabber = MagicMock()
+        with (
+            patch("phraise.floating_window.add_listener", return_value=None),
+            patch("phraise.floating_window.config.update_section", return_value=None),
+            patch("phraise.i18n.add_listener", return_value=None),
+            patch("phraise.floating_window.config.get", side_effect=custom_config_get),
+            patch("phraise.floating_window.check_output_fit", return_value=(True, 100, 4096, "")),
+            patch("phraise.floating_window.run_on_main", side_effect=lambda fn: fn()),
+        ):
+            fw = FloatingWindow(grabber, on_close=MagicMock())
+        return fw
+
+    def _set_text_and_style(self, fw, text="Hello world", style="concise"):
+        """Helper to set text and style for combined execution."""
+        fw._current_text = text
+        fw._current_style = style
+
+    # ------------------------------------------------------------------
+    # Both succeed
+    # ------------------------------------------------------------------
+
+    def test_both_succeed(self):
+        """Both optimize and translate succeed → results in both sections."""
+        fw = self._make_fw()
+        self._set_text_and_style(fw)
+
+        opt_result = {
+            "rewrites": [
+                {"text": "Version A - concise"},
+                {"text": "Version B"},
+                {"text": "Version C"},
+            ],
+            "grammar_issues": [],
+        }
+        trans_result = {"translation": "你好世界"}
+
+        def mock_opt(original_text, style, style_label, model_type, on_done):
+            on_done(opt_result, None)
+
+        def mock_trans(original_text, source_lang, target_lang, model_type, on_done):
+            on_done(trans_result, None)
+
+        with (
+            patch("phraise.floating_window.optimize_text", side_effect=mock_opt),
+            patch("phraise.floating_window.translate_text", side_effect=mock_trans),
+        ):
+            fw._do_optimize_translate()
+
+        self.assertFalse(fw._is_loading)
+        self.assertEqual(
+            fw._combined_rewrite_texts[0].text_edit.toPlainText(), "Version A - concise")
+        self.assertEqual(
+            fw._combined_rewrite_texts[1].text_edit.toPlainText(), "Version B")
+        self.assertEqual(
+            fw._combined_rewrite_texts[2].text_edit.toPlainText(), "Version C")
+        self.assertEqual(
+            fw._combined_translation_text.toPlainText(), "你好世界")
+        self.assertTrue(fw._combined_optimize_loading.isHidden())
+        self.assertTrue(fw._combined_translate_loading.isHidden())
+
+    # ------------------------------------------------------------------
+    # Optimize OK, translate fail
+    # ------------------------------------------------------------------
+
+    def test_optimize_ok_translate_fail(self):
+        """Optimize succeeds, translate fails → partial result + error."""
+        fw = self._make_fw()
+        self._set_text_and_style(fw)
+
+        opt_result = {
+            "rewrites": [{"text": "Optimized text"}],
+            "grammar_issues": [],
+        }
+        trans_error = "Translation API error"
+
+        def mock_opt(original_text, style, style_label, model_type, on_done):
+            on_done(opt_result, None)
+
+        def mock_trans(original_text, source_lang, target_lang, model_type, on_done):
+            on_done(None, trans_error)
+
+        with (
+            patch("phraise.floating_window.optimize_text", side_effect=mock_opt),
+            patch("phraise.floating_window.translate_text", side_effect=mock_trans),
+        ):
+            fw._do_optimize_translate()
+
+        self.assertFalse(fw._is_loading)
+        self.assertEqual(
+            fw._combined_rewrite_texts[0].text_edit.toPlainText(), "Optimized text")
+        self.assertEqual(
+            fw._combined_translation_text.toPlainText(), trans_error)
+        self.assertTrue(fw._combined_optimize_loading.isHidden())
+        self.assertTrue(fw._combined_translate_loading.isHidden())
+
+    # ------------------------------------------------------------------
+    # Optimize fail, translate OK
+    # ------------------------------------------------------------------
+
+    def test_optimize_fail_translate_ok(self):
+        """Optimize fails, translate succeeds → error + partial result."""
+        fw = self._make_fw()
+        self._set_text_and_style(fw)
+
+        opt_error = "Optimization API error"
+        trans_result = {"translation": "Translated text"}
+
+        def mock_opt(original_text, style, style_label, model_type, on_done):
+            on_done(None, opt_error)
+
+        def mock_trans(original_text, source_lang, target_lang, model_type, on_done):
+            on_done(trans_result, None)
+
+        with (
+            patch("phraise.floating_window.optimize_text", side_effect=mock_opt),
+            patch("phraise.floating_window.translate_text", side_effect=mock_trans),
+        ):
+            fw._do_optimize_translate()
+
+        self.assertFalse(fw._is_loading)
+        # Error shown in all three rewrite boxes (follows _show_error convention)
+        self.assertEqual(
+            fw._combined_rewrite_texts[0].text_edit.toPlainText(), opt_error)
+        self.assertEqual(
+            fw._combined_rewrite_texts[1].text_edit.toPlainText(), opt_error)
+        self.assertEqual(
+            fw._combined_rewrite_texts[2].text_edit.toPlainText(), opt_error)
+        self.assertEqual(
+            fw._combined_translation_text.toPlainText(), "Translated text")
+        self.assertTrue(fw._combined_optimize_loading.isHidden())
+        self.assertTrue(fw._combined_translate_loading.isHidden())
+
+    # ------------------------------------------------------------------
+    # Both fail
+    # ------------------------------------------------------------------
+
+    def test_both_fail(self):
+        """Both optimize and translate fail → errors in both sections."""
+        fw = self._make_fw()
+        self._set_text_and_style(fw)
+
+        opt_error = "Optimization failed"
+        trans_error = "Translation failed"
+
+        def mock_opt(original_text, style, style_label, model_type, on_done):
+            on_done(None, opt_error)
+
+        def mock_trans(original_text, source_lang, target_lang, model_type, on_done):
+            on_done(None, trans_error)
+
+        with (
+            patch("phraise.floating_window.optimize_text", side_effect=mock_opt),
+            patch("phraise.floating_window.translate_text", side_effect=mock_trans),
+        ):
+            fw._do_optimize_translate()
+
+        self.assertFalse(fw._is_loading)
+        self.assertEqual(
+            fw._combined_rewrite_texts[0].text_edit.toPlainText(), opt_error)
+        self.assertEqual(
+            fw._combined_translation_text.toPlainText(), trans_error)
+        self.assertTrue(fw._combined_optimize_loading.isHidden())
+        self.assertTrue(fw._combined_translate_loading.isHidden())
+
+    # ------------------------------------------------------------------
+    # _is_loading guard
+    # ------------------------------------------------------------------
+
+    def test_is_loading_guard_prevents_concurrent_runs(self):
+        """_is_loading True must prevent _do_optimize_translate from firing calls."""
+        fw = self._make_fw()
+        self._set_text_and_style(fw)
+        fw._is_loading = True
+
+        mock_opt = MagicMock()
+        mock_trans = MagicMock()
+
+        with (
+            patch("phraise.floating_window.optimize_text", mock_opt),
+            patch("phraise.floating_window.translate_text", mock_trans),
+        ):
+            fw._do_optimize_translate()
+
+        mock_opt.assert_not_called()
+        mock_trans.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

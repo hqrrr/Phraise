@@ -344,6 +344,8 @@ class FloatingWindow(QWidget):
         self._tabs.setCurrentIndex(self.MODE_INDEX[mode])
         if mode == "translate":
             self._do_translate()
+        elif mode == "optimize_translate":
+            self._do_optimize_translate()
         else:
             self._do_optimize()
         if not self.isVisible():
@@ -1390,6 +1392,150 @@ class FloatingWindow(QWidget):
         if result:
             translation = result.get("translation", "")
             self._translation_text.setPlainText(translation or t("fw.no_result"))
+
+    def _do_optimize_translate(self):
+        if self._is_loading:
+            return
+        self._is_loading = True
+
+        optimize_model = config.get("general", "optimize_model", default="")
+        translate_model = config.get("general", "translate_model", default="")
+
+        if not optimize_model or not translate_model:
+            self._show_toast(t("fw.label.combined_no_model"))
+            self._is_loading = False
+            return
+
+        opt_ok, _, _, opt_warning = check_output_fit(
+            self._current_text,
+            model_type=config.get("general", "optimize_model", default="model_1"),
+            mode="optimize",
+        )
+        trans_ok, _, _, trans_warning = check_output_fit(
+            self._current_text,
+            model_type=config.get("general", "translate_model", default="model_2"),
+            mode="translate",
+        )
+        if not opt_ok or not trans_ok:
+            if not opt_ok:
+                self._show_toast(opt_warning)
+            if not trans_ok:
+                self._show_toast(trans_warning)
+            self._is_loading = False
+            return
+
+        self._combined_optimize_loading.show()
+        self._combined_translate_loading.show()
+        self._set_loading_state(True)
+
+        self._combined_pending = 2
+
+        style_label = FloatingWindow._get_style_label(self._current_style)
+
+        def on_opt_done(result, error):
+            run_on_main(lambda: self._on_combined_optimize_done(result, error))
+
+        def on_trans_done(result, error):
+            run_on_main(lambda: self._on_combined_translate_done(result, error))
+
+        optimize_text(
+            self._current_text,
+            style=self._current_style,
+            style_label=style_label,
+            model_type=config.get("general", "optimize_model", default="model_1"),
+            on_done=on_opt_done,
+        )
+
+        translate_text(
+            self._current_text,
+            source_lang=self._combined_source_lang.currentData(),
+            target_lang=self._combined_target_lang.currentData(),
+            model_type=config.get("general", "translate_model", default="model_2"),
+            on_done=on_trans_done,
+        )
+
+    def _on_combined_optimize_done(self, result, error):
+        if not shiboken6.isValid(self):
+            try:
+                _ = self._combined_rewrite_texts
+            except RuntimeError:
+                return
+        self._combined_optimize_loading.hide()
+
+        for hover_edit in self._combined_rewrite_texts:
+            hover_edit.text_edit.clear()
+
+        if error:
+            for hover_edit in self._combined_rewrite_texts:
+                hover_edit.text_edit.setPlainText(error)
+        elif isinstance(result, dict) and "rewrites" in result:
+            rewrites = result["rewrites"]
+            for i, hover_edit in enumerate(self._combined_rewrite_texts):
+                if i < len(rewrites):
+                    rw = rewrites[i]
+                    content = rw.get("text", "")
+                    hover_edit.text_edit.setPlainText(content)
+                else:
+                    hover_edit.text_edit.setPlainText(t("fw.no_more_versions"))
+            if result.get("_truncated"):
+                self._show_toast(t("fw.toast.truncated"))
+            issues = result.get("grammar_issues", [])
+            self._populate_combined_grammar_issues(issues)
+        elif isinstance(result, dict) and "corrected_text" in result:
+            self._combined_rewrite_texts[0].text_edit.setPlainText(result["corrected_text"])
+        else:
+            self._combined_rewrite_texts[0].text_edit.setPlainText(
+                result if isinstance(result, str) else json.dumps(result, ensure_ascii=False, indent=2))
+
+        self._combined_pending -= 1
+        if self._combined_pending <= 0:
+            self._is_loading = False
+            self._set_loading_state(False)
+
+    def _on_combined_translate_done(self, result, error):
+        if not shiboken6.isValid(self):
+            try:
+                _ = self._combined_translation_text
+            except RuntimeError:
+                return
+        self._combined_translate_loading.hide()
+
+        if error:
+            self._combined_translation_text.setPlainText(error)
+        elif isinstance(result, dict):
+            translation = result.get("translation", "")
+            self._combined_translation_text.setPlainText(translation or t("fw.no_result"))
+        elif result:
+            self._combined_translation_text.setPlainText(str(result))
+        else:
+            self._combined_translation_text.setPlainText(t("fw.no_result"))
+
+        self._combined_pending -= 1
+        if self._combined_pending <= 0:
+            self._is_loading = False
+            self._set_loading_state(False)
+
+    def _populate_combined_grammar_issues(self, issues: list):
+        while self._combined_grammar_layout.count():
+            item = self._combined_grammar_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                self._clear_layout(item.layout())
+
+        self._combined_grammar_header.show()
+        self._combined_grammar_container.show()
+        self._combined_grammar_header.setText(t("fw.label.grammar_expanded"))
+
+        if not issues:
+            no_issues = QLabel(t("fw.no_issues"))
+            no_issues.setStyleSheet(label_style(self._theme_colors, "green", "font-size: 12px; font-weight: 500;"))
+            self._combined_grammar_layout.addWidget(no_issues)
+            return
+
+        for issue in issues:
+            row = self._build_issue_row(issue)
+            self._combined_grammar_layout.addWidget(row)
 
     def _on_custom_generate(self):
         instruction = self._custom_entry.toPlainText().strip()
