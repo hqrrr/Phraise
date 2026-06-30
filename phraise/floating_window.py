@@ -1422,11 +1422,14 @@ class FloatingWindow(QWidget):
             self._is_loading = False
             return
 
-        opt_ok, _, _, opt_warning = check_output_fit(
-            self._current_text,
-            model_type=config.get("general", "optimize_model", default="model_1"),
-            mode="optimize",
-        )
+        if optimize_model == "harper":
+            opt_ok, opt_warning = True, ""
+        else:
+            opt_ok, _, _, opt_warning = check_output_fit(
+                self._current_text,
+                model_type=config.get("general", "optimize_model", default="model_1"),
+                mode="optimize",
+            )
         trans_ok, _, _, trans_warning = check_output_fit(
             self._current_text,
             model_type=config.get("general", "translate_model", default="model_2"),
@@ -1564,15 +1567,16 @@ class FloatingWindow(QWidget):
             self._is_loading = False
             return
 
-        ok, _, _, warning = check_output_fit(
-            self._current_text,
-            model_type=optimize_model,
-            mode="optimize",
-        )
-        if not ok:
-            self._show_toast(warning)
-            self._is_loading = False
-            return
+        if optimize_model != "harper":
+            ok, _, _, warning = check_output_fit(
+                self._current_text,
+                model_type=optimize_model,
+                mode="optimize",
+            )
+            if not ok:
+                self._show_toast(warning)
+                self._is_loading = False
+                return
 
         self._combined_optimize_loading.show()
         self._regenerate_btn.setIcon(

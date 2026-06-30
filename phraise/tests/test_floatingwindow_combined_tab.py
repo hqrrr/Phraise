@@ -217,16 +217,22 @@ class TestCombinedTabUI(unittest.TestCase):
                 pass
 
     def _make_fw(self) -> FloatingWindow:
-        """Create a minimal FloatingWindow with mocked dependencies."""
+        """Create a minimal FloatingWindow with mocked dependencies.
+
+        Patches are kept active for the whole test so tab-switch and other
+        runtime config reads don't leak the real user settings.
+        """
         grabber = MagicMock()
-        with (
+        patchers = [
             patch("phraise.floating_window.add_listener", return_value=None),
             patch("phraise.floating_window.config.update_section", return_value=None),
             patch("phraise.i18n.add_listener", return_value=None),
             patch("phraise.floating_window.config.get", side_effect=_mock_config_get),
-        ):
-            fw = FloatingWindow(grabber, on_close=MagicMock())
-        return fw
+        ]
+        for p in patchers:
+            p.start()
+            self.addCleanup(p.stop)
+        return FloatingWindow(grabber, on_close=MagicMock())
 
     def test_combined_tab_exists_at_index_two(self):
         """Third tab at index 2 must exist with the optimize_translate label."""
@@ -434,7 +440,11 @@ class TestCombinedParallel(unittest.TestCase):
                 pass
 
     def _make_fw(self, optimize_model="model_1", translate_model="model_2"):
-        """Create FloatingWindow with mocked config and LLM calls."""
+        """Create FloatingWindow with mocked config and LLM calls.
+
+        Patches are kept active for the whole test so `_do_optimize_translate()`
+        and related runtime config reads don't leak the real user settings.
+        """
         def custom_config_get(*keys, default=None):
             key = tuple(keys)
             if key == ("general", "optimize_model"):
@@ -448,16 +458,18 @@ class TestCombinedParallel(unittest.TestCase):
             return _mock_config_get(*keys, default=default)
 
         grabber = MagicMock()
-        with (
+        patchers = [
             patch("phraise.floating_window.add_listener", return_value=None),
             patch("phraise.floating_window.config.update_section", return_value=None),
             patch("phraise.i18n.add_listener", return_value=None),
             patch("phraise.floating_window.config.get", side_effect=custom_config_get),
             patch("phraise.floating_window.check_output_fit", return_value=(True, 100, 4096, "")),
             patch("phraise.floating_window.run_on_main", side_effect=lambda fn: fn()),
-        ):
-            fw = FloatingWindow(grabber, on_close=MagicMock())
-        return fw
+        ]
+        for p in patchers:
+            p.start()
+            self.addCleanup(p.stop)
+        return FloatingWindow(grabber, on_close=MagicMock())
 
     def _set_text_and_style(self, fw, text="Hello world", style="concise"):
         """Helper to set text and style for combined execution."""
@@ -1271,6 +1283,161 @@ class TestCombinedRegression(unittest.TestCase):
         self.assertNotEqual(fw._combined_translation_text.styleSheet(), "")
         self.assertNotEqual(fw._combined_trans_replace_btn.styleSheet(), "")
         self.assertNotEqual(fw._combined_trans_copy_btn.styleSheet(), "")
+
+
+class TestHarperCheckOutputFitBug(unittest.TestCase):
+    """RED tests: prove check_output_fit is incorrectly called when optimize_model='harper'.
+
+    Bug locations:
+      - _do_optimize_translate() line ~1425 calls check_output_fit(model_type="harper")
+      - _redo_optimize_for_combined() line ~1567 calls check_output_fit(model_type="harper")
+    Both should SKIP check_output_fit for the optimize side when model is Harper.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._app = _qapp()
+
+    def setUp(self) -> None:
+        for attr in ("_rewrite_texts", "_translation_text", "_combined_rewrite_texts",
+                      "_combined_translation_text"):
+            try:
+                delattr(FloatingWindow, attr)
+            except AttributeError:
+                pass
+
+    def _make_fw(self, optimize_model="harper", translate_model="model_2"):
+        """Create FloatingWindow with Harper optimize + LLM translate."""
+        def custom_config_get(*keys, default=None):
+            key = tuple(keys)
+            if key == ("general", "optimize_model"):
+                return optimize_model
+            if key == ("general", "translate_model"):
+                return translate_model
+            if key == ("translation", "source_lang"):
+                return "auto"
+            if key == ("translation", "target_lang"):
+                return "zh-CN"
+            return _mock_config_get(*keys, default=default)
+
+        grabber = MagicMock()
+        with (
+            patch("phraise.floating_window.add_listener", return_value=None),
+            patch("phraise.floating_window.config.update_section", return_value=None),
+            patch("phraise.i18n.add_listener", return_value=None),
+            patch("phraise.floating_window.config.get", side_effect=custom_config_get),
+            patch("phraise.floating_window.run_on_main", side_effect=lambda fn: fn()),
+        ):
+            fw = FloatingWindow(grabber, on_close=MagicMock())
+        return fw
+
+    def _set_text_and_style(self, fw, text="Hello world", style="concise"):
+        fw._current_text = text
+        fw._current_style = style
+
+    # ------------------------------------------------------------------
+    # 1. RED: _do_optimize_translate with harper must NOT call check_output_fit
+    # ------------------------------------------------------------------
+
+    def test_do_optimize_translate_harper_skips_check_output_fit(self):
+        """_do_optimize_translate with harper must NOT call check_output_fit for optimize side."""
+        fw = self._make_fw(optimize_model="harper", translate_model="model_2")
+        self._set_text_and_style(fw)
+
+        def mock_check_text(text):
+            return [], "corrected"
+
+        def mock_translate(original_text, source_lang, target_lang, model_type, on_done):
+            on_done({"translation": "translated"}, None)
+
+        mock_check = MagicMock(return_value=(True, 0, 0, ""))
+        with (
+            patch("phraise.floating_window.check_output_fit", mock_check),
+            patch("phraise.floating_window.config.get",
+                   side_effect=_model_config_get("harper", "model_2")),
+            patch("phraise.harper_client.HarperClient") as MockClient,
+            patch("phraise.floating_window.translate_text", side_effect=mock_translate),
+        ):
+            client = MockClient.return_value
+            client.is_available.return_value = True
+            client.check_text.side_effect = mock_check_text
+            fw._do_optimize_translate()
+
+        # BUG: _do_optimize_translate() calls check_output_fit(model_type="harper")
+        # before reaching the Harper branch.  This assertion will FAIL (RED).
+        for call in mock_check.call_args_list:
+            self.assertNotEqual(
+                call.kwargs.get("model_type"), "harper",
+                "check_output_fit must not be called with model_type='harper' "
+                "when optimize_model is harper",
+            )
+
+    # ------------------------------------------------------------------
+    # 2. RED: _redo_optimize_for_combined with harper must NOT call check_output_fit
+    # ------------------------------------------------------------------
+
+    def test_redo_optimize_for_combined_harper_skips_check_output_fit(self):
+        """_redo_optimize_for_combined with harper must NOT call check_output_fit."""
+        fw = self._make_fw(optimize_model="harper", translate_model="model_2")
+        self._set_text_and_style(fw)
+        fw._combined_translation_text.setPlainText("keep me")
+
+        def mock_check_text(text):
+            return [], "corrected"
+
+        mock_check = MagicMock(return_value=(True, 0, 0, ""))
+        with (
+            patch("phraise.floating_window.check_output_fit", mock_check),
+            patch("phraise.floating_window.config.get",
+                   side_effect=_model_config_get("harper", "model_2")),
+            patch("phraise.harper_client.HarperClient") as MockClient,
+        ):
+            client = MockClient.return_value
+            client.is_available.return_value = True
+            client.check_text.side_effect = mock_check_text
+            fw._redo_optimize_for_combined()
+
+        # BUG: _redo_optimize_for_combined() calls check_output_fit(model_type="harper")
+        # before the Harper branch. This assertion will FAIL (RED).
+        for call in mock_check.call_args_list:
+            self.assertNotEqual(
+                call.kwargs.get("model_type"), "harper",
+                "check_output_fit must not be called with model_type='harper' "
+                "when optimize_model is harper",
+            )
+
+    # ------------------------------------------------------------------
+    # 3. GREEN (regression guard): LLM combined still calls check_output_fit
+    # ------------------------------------------------------------------
+
+    def test_llm_combined_still_calls_check_output_fit(self):
+        """With LLM models, check_output_fit is called for both optimize and translate."""
+        fw = self._make_fw(optimize_model="model_1", translate_model="model_2")
+        self._set_text_and_style(fw)
+
+        def mock_opt(original_text, style, style_label, model_type, on_done):
+            on_done({"rewrites": [{"text": "A"}], "grammar_issues": []}, None)
+
+        def mock_trans(original_text, source_lang, target_lang, model_type, on_done):
+            on_done({"translation": "B"}, None)
+
+        mock_check = MagicMock(return_value=(True, 0, 0, ""))
+        with (
+            patch("phraise.floating_window.check_output_fit", mock_check),
+            patch("phraise.floating_window.config.get",
+                   side_effect=_model_config_get("model_1", "model_2")),
+            patch("phraise.floating_window.optimize_text", side_effect=mock_opt),
+            patch("phraise.floating_window.translate_text", side_effect=mock_trans),
+        ):
+            fw._do_optimize_translate()
+
+        self.assertEqual(mock_check.call_count, 2,
+            "check_output_fit should be called for both optimize and translate with LLM models")
+        model_types = [c.kwargs.get("model_type") for c in mock_check.call_args_list]
+        self.assertIn("model_1", model_types,
+            "check_output_fit must be called for optimize_model='model_1'")
+        self.assertIn("model_2", model_types,
+            "check_output_fit must be called for translate_model='model_2'")
 
 
 if __name__ == "__main__":
