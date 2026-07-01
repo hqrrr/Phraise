@@ -567,7 +567,8 @@ class FloatingWindow(QWidget):
         self._source_lang_label = QLabel(t("fw.label.source_lang"))
         lang_layout.addWidget(self._source_lang_label)
         self._source_lang = NoScrollComboBox()
-        self._source_lang.setFixedWidth(140)  # wider for full names
+        self._source_lang.setMinimumWidth(80)
+        self._source_lang.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._source_lang.setStyleSheet(combo_style(self._theme_colors))
         for display_name, code in SOURCE_LANGUAGES:
             self._source_lang.addItem(display_name, code)
@@ -583,7 +584,8 @@ class FloatingWindow(QWidget):
         self._target_lang_label = QLabel(t("fw.label.target_lang"))
         lang_layout.addWidget(self._target_lang_label)
         self._target_lang = NoScrollComboBox()
-        self._target_lang.setFixedWidth(140)  # wider for full names
+        self._target_lang.setMinimumWidth(80)
+        self._target_lang.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._target_lang.setStyleSheet(combo_style(self._theme_colors))
         for display_name, code in TARGET_LANGUAGES:
             self._target_lang.addItem(display_name, code)
@@ -761,7 +763,8 @@ class FloatingWindow(QWidget):
         self._combined_source_lang_label = QLabel(t("fw.label.source_lang"))
         lang_layout.addWidget(self._combined_source_lang_label)
         self._combined_source_lang = NoScrollComboBox()
-        self._combined_source_lang.setFixedWidth(140)
+        self._combined_source_lang.setMinimumWidth(80)
+        self._combined_source_lang.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._combined_source_lang.setStyleSheet(combo_style(self._theme_colors))
         for display_name, code in SOURCE_LANGUAGES:
             self._combined_source_lang.addItem(display_name, code)
@@ -775,7 +778,8 @@ class FloatingWindow(QWidget):
         self._combined_target_lang_label = QLabel(t("fw.label.target_lang"))
         lang_layout.addWidget(self._combined_target_lang_label)
         self._combined_target_lang = NoScrollComboBox()
-        self._combined_target_lang.setFixedWidth(140)
+        self._combined_target_lang.setMinimumWidth(80)
+        self._combined_target_lang.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._combined_target_lang.setStyleSheet(combo_style(self._theme_colors))
         for display_name, code in TARGET_LANGUAGES:
             self._combined_target_lang.addItem(display_name, code)
