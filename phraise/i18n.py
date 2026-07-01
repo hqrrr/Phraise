@@ -156,6 +156,22 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Translation:",
         "zh-CN": "翻译结果：",
     },
+    "fw.tab.optimize_translate": {
+        "en": "Optimize + Translate",
+        "zh-CN": "优化+翻译",
+    },
+    "fw.label.optimize_section": {
+        "en": "Optimize:",
+        "zh-CN": "优化结果：",
+    },
+    "fw.label.translate_section": {
+        "en": "Translate:",
+        "zh-CN": "翻译结果：",
+    },
+    "fw.label.combined_no_model": {
+        "en": "Configure both Optimize and Translate models in Settings to use this tab.",
+        "zh-CN": "请在设置中配置优化和翻译模型以使用此标签页。",
+    },
     "fw.btn.replace": {
         "en": "Replace",
         "zh-CN": "替换",

@@ -195,6 +195,7 @@ class _HoverTextEdit(QWidget):
         self.text_edit.setMinimumHeight(80)
         self.text_edit.setMaximumHeight(300)
         self.text_edit.setFixedHeight(100)
+        self.text_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.text_edit.setStyleSheet(text_edit_style(theme_colors))
         self.text_edit.setMouseTracking(True)
 
@@ -223,6 +224,7 @@ class _HoverTextEdit(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.text_edit)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
     def enterEvent(self, event):
         self._btn_overlay.show()
@@ -254,6 +256,8 @@ class _HoverTextEdit(QWidget):
 
 class FloatingWindow(QWidget):
     """Main floating window with optimize and translate tabs."""
+
+    MODE_INDEX = {"optimize": 0, "translate": 1, "optimize_translate": 2}
 
     def __init__(self, grabber: TextGrabber, on_close: Callable | None = None):
         super().__init__()
@@ -339,11 +343,12 @@ class FloatingWindow(QWidget):
         if not text or not text.strip():
             return
         self._current_text = text
+        self._tabs.setCurrentIndex(self.MODE_INDEX[mode])
         if mode == "translate":
-            self._tabs.setCurrentIndex(1)
             self._do_translate()
+        elif mode == "optimize_translate":
+            self._do_optimize_translate()
         else:
-            self._tabs.setCurrentIndex(0)
             self._do_optimize()
         if not self.isVisible():
             self.show()
@@ -442,6 +447,7 @@ class FloatingWindow(QWidget):
 
         self._build_optimize_tab()
         self._build_translate_tab()
+        self._build_optimize_translate_tab()
 
         corner = QWidget()
         corner.setFixedSize(148, 30)
@@ -561,7 +567,8 @@ class FloatingWindow(QWidget):
         self._source_lang_label = QLabel(t("fw.label.source_lang"))
         lang_layout.addWidget(self._source_lang_label)
         self._source_lang = NoScrollComboBox()
-        self._source_lang.setFixedWidth(140)  # wider for full names
+        self._source_lang.setMinimumWidth(80)
+        self._source_lang.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._source_lang.setStyleSheet(combo_style(self._theme_colors))
         for display_name, code in SOURCE_LANGUAGES:
             self._source_lang.addItem(display_name, code)
@@ -577,7 +584,8 @@ class FloatingWindow(QWidget):
         self._target_lang_label = QLabel(t("fw.label.target_lang"))
         lang_layout.addWidget(self._target_lang_label)
         self._target_lang = NoScrollComboBox()
-        self._target_lang.setFixedWidth(140)  # wider for full names
+        self._target_lang.setMinimumWidth(80)
+        self._target_lang.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._target_lang.setStyleSheet(combo_style(self._theme_colors))
         for display_name, code in TARGET_LANGUAGES:
             self._target_lang.addItem(display_name, code)
@@ -639,6 +647,195 @@ class FloatingWindow(QWidget):
         scroll.setWidget(container)
         self._tabs.addTab(scroll, t("fw.tab.translate"))
         self._translate_scroll = scroll
+
+    def _build_optimize_translate_tab(self):
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet(scroll_area_style(self._theme_colors))
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(4)
+
+        optimize_header_row = QWidget()
+        optimize_header_layout = QHBoxLayout(optimize_header_row)
+        optimize_header_layout.setContentsMargins(0, 0, 0, 0)
+        self._combined_optimize_label = QLabel(t("fw.label.optimize_section"))
+        self._combined_optimize_label.setStyleSheet(
+            label_style(self._theme_colors, "text", "font-size: 13px; font-weight: 600;")
+        )
+        optimize_header_layout.addWidget(self._combined_optimize_label)
+        self._combined_optimize_loading = QLabel()
+        self._combined_optimize_loading.setPixmap(
+            qta.icon("fa5s.spinner", color=self._theme_colors["yellow"]).pixmap(QSize(16, 16))
+        )
+        self._combined_optimize_loading.hide()
+        optimize_header_layout.addWidget(self._combined_optimize_loading)
+        optimize_header_layout.addStretch()
+        layout.addWidget(optimize_header_row)
+
+        styles = config.get("styles", default=[])
+        style_widget = QWidget()
+        style_layout = FlowLayout(style_widget, spacing=4)
+        style_layout.setContentsMargins(0, 0, 0, 0)
+        self._combined_style_label = QLabel(t("fw.label.style"))
+        self._combined_style_label.setStyleSheet(
+            label_style(self._theme_colors, "text_muted", "font-size: 12px; font-weight: 500;")
+        )
+        style_layout.addWidget(self._combined_style_label)
+        self._combined_style_buttons: dict[str, QPushButton] = {}
+        for s in styles:
+            sid = s["id"]
+            label = t(f"style.{sid}")
+            if label == f"style.{sid}":
+                label = s.get("label", sid)
+            btn = QPushButton(label)
+            btn.setFixedSize(80, 26)
+            active = sid == self._current_style
+            btn.setStyleSheet(style_btn_style(self._theme_colors, active))
+            btn.clicked.connect(lambda checked, sid=sid: self._on_style_change(sid))
+            style_layout.addWidget(btn)
+            self._combined_style_buttons[sid] = btn
+        self._combined_style_widget = style_widget
+        layout.addWidget(style_widget)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setStyleSheet(separator_style(self._theme_colors))
+        layout.addWidget(sep)
+
+        self._combined_grammar_header = QLabel(t("fw.label.grammar_expanded"))
+        self._combined_grammar_header.setStyleSheet(
+            label_style(self._theme_colors, "text_muted", "font-size: 13px; font-weight: 600; margin-top: 6px;")
+        )
+        self._combined_grammar_header.setCursor(Qt.PointingHandCursor)
+        self._combined_grammar_header.mousePressEvent = lambda e: self._toggle_combined_grammar_section()
+        layout.addWidget(self._combined_grammar_header)
+
+        self._combined_grammar_container = QWidget()
+        self._combined_grammar_layout = QVBoxLayout(self._combined_grammar_container)
+        self._combined_grammar_layout.setContentsMargins(0, 4, 0, 4)
+        self._combined_grammar_layout.setSpacing(6)
+        layout.addWidget(self._combined_grammar_container)
+
+        self._combined_grammar_header.hide()
+        self._combined_grammar_container.hide()
+
+        self._combined_rewrite_label = QLabel(t("fw.label.rewrites"))
+        layout.addWidget(self._combined_rewrite_label)
+        self._combined_rewrite_texts: list[_HoverTextEdit] = []
+        for _ in range(3):
+            hover_edit = _HoverTextEdit(container, self._do_replace, self._on_copy_text, self._theme_colors)
+            hover_edit.text_edit.textChanged.connect(
+                lambda he=hover_edit: FloatingWindow._auto_resize_text_edit(he.text_edit)
+            )
+            layout.addWidget(hover_edit)
+            self._combined_rewrite_texts.append(hover_edit)
+
+        translate_sep = QFrame()
+        translate_sep.setFrameShape(QFrame.HLine)
+        translate_sep.setStyleSheet(separator_style(self._theme_colors))
+        layout.addWidget(translate_sep)
+
+        translate_header_row = QWidget()
+        translate_header_layout = QHBoxLayout(translate_header_row)
+        translate_header_layout.setContentsMargins(0, 0, 0, 0)
+        self._combined_translate_label = QLabel(t("fw.label.translate_section"))
+        self._combined_translate_label.setStyleSheet(
+            label_style(self._theme_colors, "text", "font-size: 13px; font-weight: 600;")
+        )
+        translate_header_layout.addWidget(self._combined_translate_label)
+        self._combined_translate_loading = QLabel()
+        self._combined_translate_loading.setPixmap(
+            qta.icon("fa5s.spinner", color=self._theme_colors["yellow"]).pixmap(QSize(16, 16))
+        )
+        self._combined_translate_loading.hide()
+        translate_header_layout.addWidget(self._combined_translate_loading)
+        translate_header_layout.addStretch()
+        layout.addWidget(translate_header_row)
+
+        lang_widget = QWidget()
+        lang_widget.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        lang_layout = QHBoxLayout(lang_widget)
+        lang_layout.setContentsMargins(0, 0, 0, 0)
+        self._combined_source_lang_label = QLabel(t("fw.label.source_lang"))
+        lang_layout.addWidget(self._combined_source_lang_label)
+        self._combined_source_lang = NoScrollComboBox()
+        self._combined_source_lang.setMinimumWidth(80)
+        self._combined_source_lang.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._combined_source_lang.setStyleSheet(combo_style(self._theme_colors))
+        for display_name, code in SOURCE_LANGUAGES:
+            self._combined_source_lang.addItem(display_name, code)
+        saved_source = config.get("translation", "source_lang", default="auto")
+        if saved_source == "en":
+            saved_source = "en-US"
+        idx = self._combined_source_lang.findData(saved_source)
+        if idx >= 0:
+            self._combined_source_lang.setCurrentIndex(idx)
+        lang_layout.addWidget(self._combined_source_lang)
+        self._combined_target_lang_label = QLabel(t("fw.label.target_lang"))
+        lang_layout.addWidget(self._combined_target_lang_label)
+        self._combined_target_lang = NoScrollComboBox()
+        self._combined_target_lang.setMinimumWidth(80)
+        self._combined_target_lang.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._combined_target_lang.setStyleSheet(combo_style(self._theme_colors))
+        for display_name, code in TARGET_LANGUAGES:
+            self._combined_target_lang.addItem(display_name, code)
+        saved_target = config.get("translation", "target_lang", default="zh-CN")
+        if saved_target == "en":
+            saved_target = "en-US"
+        idx = self._combined_target_lang.findData(saved_target)
+        if idx >= 0:
+            self._combined_target_lang.setCurrentIndex(idx)
+        lang_layout.addWidget(self._combined_target_lang)
+        lang_layout.addStretch()
+        layout.addWidget(lang_widget)
+
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.HLine)
+        sep2.setStyleSheet(separator_style(self._theme_colors))
+        layout.addWidget(sep2)
+
+        self._combined_translation_result_label = QLabel(t("fw.label.translation_result"))
+        layout.addWidget(self._combined_translation_result_label)
+        self._combined_translation_text = QTextEdit()
+        self._combined_translation_text.setReadOnly(True)
+        self._combined_translation_text.setMinimumHeight(60)
+        self._combined_translation_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._combined_translation_text.setStyleSheet(text_edit_style(self._theme_colors))
+        layout.addWidget(self._combined_translation_text, 1)
+
+        trans_btn_row = QWidget()
+        trans_btn_layout = QHBoxLayout(trans_btn_row)
+        trans_btn_layout.setContentsMargins(0, 4, 0, 0)
+        self._combined_trans_replace_btn = QPushButton(t("fw.btn.replace_original"))
+        self._combined_trans_replace_btn.setFixedSize(130, 24)
+        self._combined_trans_replace_btn.setStyleSheet(action_btn_style(self._theme_colors, "accent"))
+        self._combined_trans_replace_btn.clicked.connect(lambda checked=False: self._do_replace(self._combined_translation_text.toPlainText()))
+        trans_btn_layout.addWidget(self._combined_trans_replace_btn)
+        self._combined_trans_copy_btn = QPushButton(t("fw.btn.copy"))
+        self._combined_trans_copy_btn.setFixedSize(50, 24)
+        self._combined_trans_copy_btn.setStyleSheet(action_btn_style(self._theme_colors, "surface"))
+        self._combined_trans_copy_btn.clicked.connect(lambda checked=False: self._on_copy_text(self._combined_translation_text))
+        trans_btn_layout.addWidget(self._combined_trans_copy_btn)
+        trans_btn_layout.addStretch()
+        layout.addWidget(trans_btn_row)
+
+        layout.addStretch()
+
+        scroll.setWidget(container)
+        self._tabs.addTab(scroll, t("fw.tab.optimize_translate"))
+        self._combined_scroll = scroll
+
+    def _toggle_combined_grammar_section(self):
+        if self._combined_grammar_container.isVisible():
+            self._combined_grammar_container.hide()
+            self._combined_grammar_header.setText(t("fw.label.grammar_collapsed"))
+        else:
+            self._combined_grammar_container.show()
+            self._combined_grammar_header.setText(t("fw.label.grammar_expanded"))
 
     # ---- Event handlers ----
 
@@ -797,7 +994,10 @@ class FloatingWindow(QWidget):
     # ---- Tab & style ----
 
     def _on_tab_changed(self, idx):
-        self._current_mode = "optimize" if idx == 0 else "translate"
+        for mode, index in self.MODE_INDEX.items():
+            if index == idx:
+                self._current_mode = mode
+                break
         config.set("floating_window", "last_tab", value=self._current_mode)
         if hasattr(self, '_model_combo') and self._model_combo is not None:
             self._refresh_model_combo()
@@ -911,6 +1111,8 @@ class FloatingWindow(QWidget):
         from .harper_types import HarperFixApplier
         corrected = HarperFixApplier.apply_fixes(self._current_text, edits)
         self._rewrite_texts[0].text_edit.setPlainText(corrected)
+        if self._combined_rewrite_texts:
+            self._combined_rewrite_texts[0].text_edit.setPlainText(corrected)
 
     def _clear_layout(self, layout):
         while layout.count():
@@ -922,6 +1124,10 @@ class FloatingWindow(QWidget):
 
     def _refresh_model_combo(self):
         if not hasattr(self, '_model_combo') or self._model_combo is None:
+            return
+
+        if self._current_mode == "optimize_translate":
+            self._model_combo.hide()
             return
 
         # Hide model combo when in Harper (local) optimize mode
@@ -946,6 +1152,8 @@ class FloatingWindow(QWidget):
     def _on_model_combo_changed(self, idx):
         if idx < 0:
             return
+        if self._current_mode == "optimize_translate":
+            return
         model_type = self._model_combo.itemData(idx)
         config_key = "optimize_model" if self._current_mode == "optimize" else "translate_model"
         config.set("general", config_key, value=model_type)
@@ -955,8 +1163,14 @@ class FloatingWindow(QWidget):
         config.set("floating_window", "last_style", value=style_id)
         for sid, btn in self._style_buttons.items():
             btn.setStyleSheet(style_btn_style(self._theme_colors, sid == style_id))
+        if hasattr(self, "_combined_style_buttons"):
+            for sid, btn in self._combined_style_buttons.items():
+                btn.setStyleSheet(style_btn_style(self._theme_colors, sid == style_id))
         if self._current_text:
-            self._do_optimize()
+            if self._current_mode == "optimize_translate":
+                self._redo_optimize_for_combined()
+            elif self._current_mode == "optimize":
+                self._do_optimize()
 
     # ---- Layout switching ----
 
@@ -1201,6 +1415,351 @@ class FloatingWindow(QWidget):
             translation = result.get("translation", "")
             self._translation_text.setPlainText(translation or t("fw.no_result"))
 
+    def _do_optimize_translate(self):
+        if self._is_loading:
+            return
+        self._is_loading = True
+
+        optimize_model = config.get("general", "optimize_model", default="")
+        translate_model = config.get("general", "translate_model", default="")
+
+        if not optimize_model or not translate_model:
+            self._show_toast(t("fw.label.combined_no_model"))
+            self._is_loading = False
+            return
+
+        if optimize_model == "harper":
+            opt_ok, opt_warning = True, ""
+        else:
+            opt_ok, _, _, opt_warning = check_output_fit(
+                self._current_text,
+                model_type=config.get("general", "optimize_model", default="model_1"),
+                mode="optimize",
+            )
+        trans_ok, _, _, trans_warning = check_output_fit(
+            self._current_text,
+            model_type=config.get("general", "translate_model", default="model_2"),
+            mode="translate",
+        )
+        if not opt_ok or not trans_ok:
+            if not opt_ok:
+                self._show_toast(opt_warning)
+            if not trans_ok:
+                self._show_toast(trans_warning)
+            self._is_loading = False
+            return
+
+        self._combined_optimize_loading.show()
+        self._combined_translate_loading.show()
+        self._regenerate_btn.setIcon(
+            qta.icon("fa5s.spinner", color=self._theme_colors["yellow"])
+        )
+
+        self._combined_pending = 2
+
+        if optimize_model == "harper":
+            self._do_optimize_translate_harper()
+            return
+
+        self._do_optimize_translate_llm()
+
+    def _do_optimize_translate_harper(self):
+        """Run Harper grammar check in parallel with LLM translation."""
+        from .harper_client import HarperClient
+
+        client = HarperClient()
+        if not client.is_available():
+            self._show_toast(t("harper.error.binary_not_found"))
+            self._do_optimize_translate_llm()
+            return
+
+        MAX_HARPER_BYTES = 120 * 1024
+        if len(self._current_text.encode("utf-8")) > MAX_HARPER_BYTES:
+            self._show_toast(t("harper.error.text_too_large"))
+            self._do_optimize_translate_llm()
+            return
+
+        try:
+            prev = getattr(self, '_combined_active_client', None)
+            if prev is not None:
+                try:
+                    prev.finished.disconnect()
+                except RuntimeError:
+                    pass  # Signal may already be disconnected; ignore.
+            self._combined_active_client = client
+
+            client.finished.connect(
+                lambda result: run_on_main(
+                    lambda r=result: self._on_combined_harper_done(r)
+                )
+            )
+            issues, corrected_text = client.check_text(self._current_text)
+            if issues or corrected_text != self._current_text:
+                sync_result = LintResult(
+                    success=True, issues=issues, corrected_text=corrected_text
+                )
+                self._on_combined_harper_done(sync_result)
+        except (RuntimeError, OSError, ValueError):
+            self._show_toast(t("harper.error.process_crash"))
+            self._do_optimize_translate_llm()
+            return
+        except Exception as e:
+            write_error(e, "FloatingWindow._do_optimize_translate_harper")
+            self._show_toast(t("harper.error.process_crash"))
+            self._do_optimize_translate_llm()
+            return
+
+        def on_trans_done(result, error):
+            run_on_main(lambda: self._on_combined_translate_done(result, error))
+
+        translate_text(
+            self._current_text,
+            source_lang=self._combined_source_lang.currentData(),
+            target_lang=self._combined_target_lang.currentData(),
+            model_type=config.get("general", "translate_model", default="model_2"),
+            on_done=on_trans_done,
+        )
+
+    def _do_optimize_translate_llm(self):
+        """Fire LLM optimize + translate in parallel for the combined tab."""
+        style_label = FloatingWindow._get_style_label(self._current_style)
+
+        def on_opt_done(result, error):
+            run_on_main(lambda: self._on_combined_optimize_done(result, error))
+
+        def on_trans_done(result, error):
+            run_on_main(lambda: self._on_combined_translate_done(result, error))
+
+        optimize_text(
+            self._current_text,
+            style=self._current_style,
+            style_label=style_label,
+            model_type=config.get("general", "optimize_model", default="model_1"),
+            on_done=on_opt_done,
+        )
+
+        translate_text(
+            self._current_text,
+            source_lang=self._combined_source_lang.currentData(),
+            target_lang=self._combined_target_lang.currentData(),
+            model_type=config.get("general", "translate_model", default="model_2"),
+            on_done=on_trans_done,
+        )
+
+    def _do_combined_optimize_llm_only(self):
+        """Fire only LLM optimize for the combined tab (used when Harper fails)."""
+        style_label = FloatingWindow._get_style_label(self._current_style)
+
+        def on_opt_done(result, error):
+            run_on_main(lambda: self._on_combined_optimize_done(result, error))
+
+        optimize_text(
+            self._current_text,
+            style=self._current_style,
+            style_label=style_label,
+            model_type=config.get("general", "optimize_model", default="model_1"),
+            on_done=on_opt_done,
+        )
+
+    def _redo_optimize_for_combined(self):
+        """Re-run only the optimize side of the combined tab (e.g., after a style change)."""
+        if self._is_loading:
+            return
+        self._is_loading = True
+
+        optimize_model = config.get("general", "optimize_model", default="")
+        if not optimize_model:
+            self._show_toast(t("fw.label.combined_no_model"))
+            self._is_loading = False
+            return
+
+        if optimize_model != "harper":
+            ok, _, _, warning = check_output_fit(
+                self._current_text,
+                model_type=optimize_model,
+                mode="optimize",
+            )
+            if not ok:
+                self._show_toast(warning)
+                self._is_loading = False
+                return
+
+        self._combined_optimize_loading.show()
+        self._regenerate_btn.setIcon(
+            qta.icon("fa5s.spinner", color=self._theme_colors["yellow"])
+        )
+        self._combined_pending = 1
+
+        if optimize_model == "harper":
+            self._redo_optimize_harper_for_combined()
+            return
+
+        self._do_combined_optimize_llm_only()
+
+    def _redo_optimize_harper_for_combined(self):
+        """Run Harper optimize only for the combined tab; translation is preserved."""
+        from .harper_client import HarperClient
+
+        client = HarperClient()
+        if not client.is_available():
+            self._show_toast(t("harper.error.binary_not_found"))
+            self._do_combined_optimize_llm_only()
+            return
+
+        MAX_HARPER_BYTES = 120 * 1024
+        if len(self._current_text.encode("utf-8")) > MAX_HARPER_BYTES:
+            self._show_toast(t("harper.error.text_too_large"))
+            self._do_combined_optimize_llm_only()
+            return
+
+        try:
+            prev = getattr(self, '_combined_active_client', None)
+            if prev is not None:
+                try:
+                    prev.finished.disconnect()
+                except RuntimeError:
+                    pass
+            self._combined_active_client = client
+
+            client.finished.connect(
+                lambda result: run_on_main(
+                    lambda r=result: self._on_combined_harper_done(r)
+                )
+            )
+            issues, corrected_text = client.check_text(self._current_text)
+            if issues or corrected_text != self._current_text:
+                sync_result = LintResult(
+                    success=True, issues=issues, corrected_text=corrected_text
+                )
+                self._on_combined_harper_done(sync_result)
+        except (RuntimeError, OSError, ValueError):
+            self._show_toast(t("harper.error.process_crash"))
+            self._do_combined_optimize_llm_only()
+        except Exception as e:
+            write_error(e, "FloatingWindow._redo_optimize_harper_for_combined")
+            self._show_toast(t("harper.error.process_crash"))
+            self._do_combined_optimize_llm_only()
+
+    def _on_combined_harper_done(self, result: LintResult):
+        """Callback for Harper check completion in combined tab."""
+        if not shiboken6.isValid(self):
+            try:
+                _ = self._combined_rewrite_texts
+            except RuntimeError:
+                return
+
+        if not result.success or result.error:
+            if result.error:
+                self._show_toast(result.error)
+            self._do_combined_optimize_llm_only()
+            return
+
+        self._combined_rewrite_texts[0].text_edit.clear()
+        self._combined_rewrite_texts[1].text_edit.clear()
+        self._combined_rewrite_texts[2].text_edit.clear()
+        self._populate_combined_grammar_issues(result.issues)
+        self._combined_rewrite_texts[0].text_edit.setPlainText(result.corrected_text)
+        self._combined_rewrite_texts[1].hide()
+        self._combined_rewrite_texts[2].hide()
+        self._combined_optimize_loading.hide()
+        self._combined_pending -= 1
+        if self._combined_pending <= 0:
+            self._is_loading = False
+            self._regenerate_btn.setIcon(
+                qta.icon("fa5s.redo", color=self._theme_colors["text_muted"])
+            )
+
+    def _on_combined_optimize_done(self, result, error):
+        if not shiboken6.isValid(self):
+            try:
+                _ = self._combined_rewrite_texts
+            except RuntimeError:
+                return
+        self._combined_optimize_loading.hide()
+
+        for hover_edit in self._combined_rewrite_texts:
+            hover_edit.show()
+            hover_edit.text_edit.clear()
+
+        if error:
+            for hover_edit in self._combined_rewrite_texts:
+                hover_edit.text_edit.setPlainText(error)
+        elif isinstance(result, dict) and "rewrites" in result:
+            issues = result.get("grammar_issues", [])
+            self._populate_combined_grammar_issues(issues)
+            rewrites = result["rewrites"]
+            for i, hover_edit in enumerate(self._combined_rewrite_texts):
+                if i < len(rewrites):
+                    rw = rewrites[i]
+                    content = rw.get("text", "")
+                    hover_edit.text_edit.setPlainText(content)
+                else:
+                    hover_edit.text_edit.setPlainText(t("fw.no_more_versions"))
+            if result.get("_truncated"):
+                self._show_toast(t("fw.toast.truncated"))
+        elif isinstance(result, dict) and "corrected_text" in result:
+            self._combined_rewrite_texts[0].text_edit.setPlainText(result["corrected_text"])
+        else:
+            self._combined_rewrite_texts[0].text_edit.setPlainText(
+                result if isinstance(result, str) else json.dumps(result, ensure_ascii=False, indent=2))
+
+        self._combined_pending -= 1
+        if self._combined_pending <= 0:
+            self._is_loading = False
+            self._regenerate_btn.setIcon(
+                qta.icon("fa5s.redo", color=self._theme_colors["text_muted"])
+            )
+
+    def _on_combined_translate_done(self, result, error):
+        if not shiboken6.isValid(self):
+            try:
+                _ = self._combined_translation_text
+            except RuntimeError:
+                return
+        self._combined_translate_loading.hide()
+
+        if error:
+            self._combined_translation_text.setPlainText(error)
+        elif isinstance(result, dict):
+            translation = result.get("translation", "")
+            self._combined_translation_text.setPlainText(translation or t("fw.no_result"))
+        elif result:
+            self._combined_translation_text.setPlainText(str(result))
+        else:
+            self._combined_translation_text.setPlainText(t("fw.no_result"))
+
+        self._combined_pending -= 1
+        if self._combined_pending <= 0:
+            self._is_loading = False
+            self._regenerate_btn.setIcon(
+                qta.icon("fa5s.redo", color=self._theme_colors["text_muted"])
+            )
+
+    def _populate_combined_grammar_issues(self, issues: list):
+        while self._combined_grammar_layout.count():
+            item = self._combined_grammar_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                self._clear_layout(item.layout())
+
+        self._combined_grammar_header.show()
+        self._combined_grammar_container.show()
+        self._combined_grammar_header.setText(t("fw.label.grammar_expanded"))
+
+        self._grammar_issues = list(issues)
+        self._recompute_corrected_text()
+
+        if not issues:
+            no_issues = QLabel(t("fw.no_issues"))
+            no_issues.setStyleSheet(label_style(self._theme_colors, "green", "font-size: 12px; font-weight: 500;"))
+            self._combined_grammar_layout.addWidget(no_issues)
+            return
+
+        for issue in issues:
+            row = self._build_issue_row(issue)
+            self._combined_grammar_layout.addWidget(row)
+
     def _on_custom_generate(self):
         instruction = self._custom_entry.toPlainText().strip()
         if not instruction or not self._current_text or self._is_loading:
@@ -1237,6 +1796,8 @@ class FloatingWindow(QWidget):
     def _on_regenerate(self):
         if self._current_mode == "translate":
             self._do_translate()
+        elif self._current_mode == "optimize_translate":
+            self._do_optimize_translate()
         else:
             self._do_optimize()
 
@@ -1312,6 +1873,7 @@ class FloatingWindow(QWidget):
         if hasattr(self, '_tabs'):
             self._tabs.setTabText(0, t("fw.tab.optimize"))
             self._tabs.setTabText(1, t("fw.tab.translate"))
+            self._tabs.setTabText(2, t("fw.tab.optimize_translate"))
         if hasattr(self, '_style_label'):
             self._style_label.setText(t("fw.label.style"))
         if hasattr(self, '_style_buttons'):
@@ -1334,6 +1896,37 @@ class FloatingWindow(QWidget):
                 if idx >= 0:
                     self._model_combo.setCurrentIndex(idx)
             self._model_combo.blockSignals(False)
+
+        # Retranslate combined tab widgets
+        if hasattr(self, '_combined_optimize_label'):
+            self._combined_optimize_label.setText(t("fw.label.optimize_section"))
+        if hasattr(self, '_combined_translate_label'):
+            self._combined_translate_label.setText(t("fw.label.translate_section"))
+        if hasattr(self, '_combined_style_label'):
+            self._combined_style_label.setText(t("fw.label.style"))
+        if hasattr(self, '_combined_style_buttons'):
+            styles = config.get("styles", default=[])
+            style_by_id = {s["id"]: s for s in styles}
+            for sid, btn in self._combined_style_buttons.items():
+                label = t(f"style.{sid}")
+                if label == f"style.{sid}":
+                    s = style_by_id.get(sid, {})
+                    label = s.get("label", sid)
+                btn.setText(label)
+        if hasattr(self, '_combined_grammar_header'):
+            self._combined_grammar_header.setText(t("fw.label.grammar_expanded"))
+        if hasattr(self, '_combined_rewrite_label'):
+            self._combined_rewrite_label.setText(t("fw.label.rewrites"))
+        if hasattr(self, '_combined_source_lang_label'):
+            self._combined_source_lang_label.setText(t("fw.label.source_lang"))
+        if hasattr(self, '_combined_target_lang_label'):
+            self._combined_target_lang_label.setText(t("fw.label.target_lang"))
+        if hasattr(self, '_combined_translation_result_label'):
+            self._combined_translation_result_label.setText(t("fw.label.translation_result"))
+        if hasattr(self, '_combined_trans_replace_btn'):
+            self._combined_trans_replace_btn.setText(t("fw.btn.replace_original"))
+        if hasattr(self, '_combined_trans_copy_btn'):
+            self._combined_trans_copy_btn.setText(t("fw.btn.copy"))
 
     def _apply_theme(self, name: str):
         tc = get_theme(name)["colors"]
@@ -1373,6 +1966,51 @@ class FloatingWindow(QWidget):
         self._translation_text.setStyleSheet(text_edit_style(tc))
         self._trans_replace_btn.setStyleSheet(action_btn_style(tc, "accent"))
         self._trans_copy_btn.setStyleSheet(action_btn_style(tc, "surface"))
+
+        # Style combined tab widgets
+        if hasattr(self, '_combined_scroll') and self._combined_scroll is not None:
+            self._combined_scroll.setStyleSheet(scroll_area_style(tc))
+        if hasattr(self, '_combined_optimize_label') and self._combined_optimize_label is not None:
+            self._combined_optimize_label.setStyleSheet(
+                label_style(tc, "text", "font-size: 13px; font-weight: 600;"))
+        if hasattr(self, '_combined_translate_label') and self._combined_translate_label is not None:
+            self._combined_translate_label.setStyleSheet(
+                label_style(tc, "text", "font-size: 13px; font-weight: 600;"))
+        if hasattr(self, '_combined_style_label') and self._combined_style_label is not None:
+            self._combined_style_label.setStyleSheet(
+                label_style(tc, "text_muted", "font-size: 12px; font-weight: 500;"))
+        if hasattr(self, '_combined_style_buttons'):
+            active_sid = self._current_style
+            for sid, btn in self._combined_style_buttons.items():
+                btn.setStyleSheet(style_btn_style(tc, sid == active_sid))
+        if hasattr(self, '_combined_grammar_header') and self._combined_grammar_header is not None:
+            self._combined_grammar_header.setStyleSheet(
+                label_style(tc, "text_muted", "font-size: 13px; font-weight: 600; margin-top: 6px;"))
+        if hasattr(self, '_combined_rewrite_label') and self._combined_rewrite_label is not None:
+            self._combined_rewrite_label.setStyleSheet(
+                label_style(tc, "text_muted", "font-size: 12px; font-weight: 500;"))
+        if hasattr(self, '_combined_rewrite_texts'):
+            for he in self._combined_rewrite_texts:
+                he.update_theme(tc)
+        if hasattr(self, '_combined_source_lang') and self._combined_source_lang is not None:
+            self._combined_source_lang.setStyleSheet(combo_style(tc))
+        if hasattr(self, '_combined_target_lang') and self._combined_target_lang is not None:
+            self._combined_target_lang.setStyleSheet(combo_style(tc))
+        if hasattr(self, '_combined_translation_text') and self._combined_translation_text is not None:
+            self._combined_translation_text.setStyleSheet(text_edit_style(tc))
+        if hasattr(self, '_combined_trans_replace_btn') and self._combined_trans_replace_btn is not None:
+            self._combined_trans_replace_btn.setStyleSheet(action_btn_style(tc, "accent"))
+        if hasattr(self, '_combined_trans_copy_btn') and self._combined_trans_copy_btn is not None:
+            self._combined_trans_copy_btn.setStyleSheet(action_btn_style(tc, "surface"))
+        if hasattr(self, '_combined_source_lang_label') and self._combined_source_lang_label is not None:
+            self._combined_source_lang_label.setStyleSheet(
+                label_style(tc, "text_muted", "font-size: 12px; font-weight: 500;"))
+        if hasattr(self, '_combined_target_lang_label') and self._combined_target_lang_label is not None:
+            self._combined_target_lang_label.setStyleSheet(
+                label_style(tc, "text_muted", "font-size: 12px; font-weight: 500;"))
+        if hasattr(self, '_combined_translation_result_label') and self._combined_translation_result_label is not None:
+            self._combined_translation_result_label.setStyleSheet(
+                label_style(tc, "text_muted", "font-size: 12px; font-weight: 500;"))
 
         self._loading_overlay.setStyleSheet(
             f"background: {rgba(tc['bg'], 200)}; border-radius: 8px;")

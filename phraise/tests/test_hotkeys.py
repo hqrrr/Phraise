@@ -406,7 +406,7 @@ class TestDoubleTapDetectorStateMachine(unittest.TestCase):
         callback.assert_called_once()
 
     def test_trigger_then_trigger_again(self):
-        """Double-tap fires → hold modifiers → double-tap again → fires twice."""
+        """Double-tap fires → release modifier → re-press → double-tap → fires twice."""
         detector, callback = self.make_detector()
 
         # First trigger
@@ -415,7 +415,10 @@ class TestDoubleTapDetectorStateMachine(unittest.TestCase):
         detector._on_release(mock_key("c"))
         detector._on_press(mock_key("c"))
         detector._on_release(mock_key("c"))
-        # Second trigger (modifiers still held)
+        # Release modifier and re-press before next trigger (new behavior)
+        detector._on_release(mock_key("ctrl"))
+        detector._on_press(mock_key("ctrl"))
+        # Second trigger
         detector._on_press(mock_key("c"))
         detector._on_release(mock_key("c"))
         detector._on_press(mock_key("c"))
@@ -488,6 +491,7 @@ class TestDoubleTapDetectorStateMachine(unittest.TestCase):
         # Release only one modifier
         detector._on_release(mock_key("shift"))
         # Retry with both modifiers again
+        detector._on_press(mock_key("ctrl"))
         detector._on_press(mock_key("shift"))
         detector._on_press(mock_key("a"))
         detector._on_release(mock_key("a"))
@@ -656,6 +660,75 @@ class TestDoubleTapDetectorStateMachine(unittest.TestCase):
 
         if hasattr(detector, "stop"):
             detector.stop()
+
+    # -- non-configured modifiers -----------------------------------------
+
+    def test_non_configured_modifier_shift_does_not_trigger(self):
+        """Shift+C+C does NOT trigger when detector expects Ctrl."""
+        detector, callback = self.make_detector()
+
+        detector._on_press(mock_key("shift"))
+        detector._on_press(mock_key("c"))
+        detector._on_release(mock_key("c"))
+        detector._on_press(mock_key("c"))
+        detector._on_release(mock_key("c"))
+        detector._on_release(mock_key("shift"))
+
+        self.assertEqual(callback.call_count, 0)
+        self.assertEqual(detector._state, "IDLE")
+
+    def test_non_configured_modifier_alt_does_not_trigger(self):
+        """Alt+C+C does NOT trigger when detector expects Ctrl."""
+        detector, callback = self.make_detector()
+
+        detector._on_press(mock_key("alt"))
+        detector._on_press(mock_key("c"))
+        detector._on_release(mock_key("c"))
+        detector._on_press(mock_key("c"))
+        detector._on_release(mock_key("c"))
+        detector._on_release(mock_key("alt"))
+
+        self.assertEqual(callback.call_count, 0)
+        self.assertEqual(detector._state, "IDLE")
+
+    def test_non_configured_modifier_win_does_not_trigger(self):
+        """Win/Cmd+C+C does NOT trigger when detector expects Ctrl."""
+        detector, callback = self.make_detector()
+
+        detector._on_press(mock_key("cmd"))
+        detector._on_press(mock_key("c"))
+        detector._on_release(mock_key("c"))
+        detector._on_press(mock_key("c"))
+        detector._on_release(mock_key("c"))
+        detector._on_release(mock_key("cmd"))
+
+        self.assertEqual(callback.call_count, 0)
+        self.assertEqual(detector._state, "IDLE")
+
+    def test_no_modifier_hotkey_ignores_any_modifier(self):
+        """Shift+Z+Z does NOT trigger when detector has no configured modifiers."""
+        detector, callback = self.make_detector(modifiers=(), trigger_key="z")
+
+        detector._on_press(mock_key("shift"))
+        detector._on_press(mock_key("z"))
+        detector._on_release(mock_key("z"))
+        detector._on_press(mock_key("z"))
+        detector._on_release(mock_key("z"))
+        detector._on_release(mock_key("shift"))
+
+        self.assertEqual(callback.call_count, 0)
+        self.assertEqual(detector._state, "IDLE")
+
+    def test_bare_trigger_after_stale_modifiers_does_not_trigger(self):
+        """Pressing trigger key when state is stuck at MODIFIERS_HELD with no modifiers held does not trigger."""
+        detector, callback = self.make_detector()
+
+        detector._state = "MODIFIERS_HELD"
+        detector._held_modifiers = set()
+        detector._on_press(mock_key("c"))
+
+        self.assertEqual(detector._state, "IDLE")
+        self.assertEqual(callback.call_count, 0)
 
 
 # ====================================================================

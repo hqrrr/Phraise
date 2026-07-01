@@ -136,7 +136,7 @@ class DoubleTapDetector:
                 if key in mod_keys or key_name == mod_name:
                     is_modifier = True
                     self._held_modifiers.add(mod_name)
-                    if self._state == "IDLE":
+                    if self._state == "IDLE" and self._modifiers and mod_name in self._modifiers:
                         self._state = "MODIFIERS_HELD"
                     break
 
@@ -147,12 +147,16 @@ class DoubleTapDetector:
                 return
 
             if self._key_matches_trigger(key, key_name):
+                if self._modifiers and not self._modifiers.issubset(self._held_modifiers):
+                    self._reset()
+                    return
                 if self._state == "MODIFIERS_HELD":
                     self._state = "WAITING_KEY"
                     self._start_timer()
                 elif self._state == "WAITING_KEY":
                     self._cancel_timer()
-                    self._state = "MODIFIERS_HELD"
+                    self._state = "IDLE"
+                    self._held_modifiers.clear()
                     fire_callback = True
                     self._callback_running = True
             else:

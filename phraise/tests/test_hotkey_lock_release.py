@@ -152,8 +152,8 @@ class TestLockReleasedDuringCallback(unittest.TestCase):
         detector._on_press(mock_key("c"))  # fires callback
 
         cb_mock.assert_called_once()
-        # State should still be MODIFIERS_HELD since no modifier was released
-        self.assertEqual(detector._state, "MODIFIERS_HELD")
+        # State is IDLE after callback (new behavior: unconditional reset)
+        self.assertEqual(detector._state, "IDLE")
 
 
 # ====================================================================
@@ -283,12 +283,14 @@ class TestCallbackExceptionSafety(unittest.TestCase):
         detector._on_press(mock_key("c"))  # callback raises, lock re-acquired
 
         # State should still be valid
-        self.assertEqual(detector._state, "MODIFIERS_HELD")
+        self.assertEqual(detector._state, "IDLE")
+        self.assertEqual(detector._held_modifiers, set())
         self.assertFalse(detector._callback_running)
 
         # Lock should be released after _on_press returns (no leak)
         # Verify by calling _on_release — must not deadlock
         detector._on_release(mock_key("ctrl"))
+        # State was already IDLE, _on_release resets again → still IDLE
         self.assertEqual(detector._state, "IDLE")
 
 
@@ -355,7 +357,7 @@ class TestTimingEdgeCases(unittest.TestCase):
     """Edge cases involving timers and concurrent events."""
 
     def test_rapid_trigger_after_callback_no_double_fire(self):
-        """Extremely fast re-trigger after callback should not double-fire."""
+        """Two complete double-tap sequences with modifier release in between."""
         call_count = 0
 
         def callback():
@@ -368,15 +370,16 @@ class TestTimingEdgeCases(unittest.TestCase):
             callback=cb_mock, timeout=0.5,
         )
 
-        # Press and hold Ctrl
+        # First trigger
         detector._on_press(mock_key("ctrl"))
-        # Rapid C taps
         detector._on_press(mock_key("c"))  # 1st tap
-        detector._on_press(mock_key("c"))  # 2nd tap → fires callback
-        # During callback (blocked by _callback_running), more taps
-        # These happen after callback returns because _on_press is synchronous
-        detector._on_press(mock_key("c"))  # new 1st tap (after callback)
+        detector._on_press(mock_key("c"))  # 2nd tap → fires callback #1
+        detector._on_release(mock_key("ctrl"))  # release modifier (new behavior)
+        # Second trigger: must re-press modifier
+        detector._on_press(mock_key("ctrl"))
+        detector._on_press(mock_key("c"))  # 1st tap
         detector._on_press(mock_key("c"))  # 2nd tap → fires callback #2
+        detector._on_release(mock_key("ctrl"))
 
         self.assertEqual(cb_mock.call_count, 2)
         self.assertEqual(call_count, 2)
