@@ -19,11 +19,11 @@ from unittest.mock import MagicMock, patch
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QSizePolicy, QTextEdit
+from PySide6.QtWidgets import QApplication, QCheckBox, QLabel, QPushButton, QSizePolicy, QTextEdit
 
 from phraise.floating_window import FloatingWindow, NoScrollComboBox, _HoverTextEdit
 from phraise.harper_client import LintResult
-from phraise.harper_types import HarperIssue
+from phraise.harper_types import HarperIssue, LspPosition, LspRange, LspTextEdit
 from phraise.i18n import t
 
 
@@ -990,6 +990,32 @@ class TestCombinedHarper(unittest.TestCase):
         self.assertEqual(fw._combined_rewrite_texts[0].text_edit.toPlainText(), "Fallback optimized")
         self.assertEqual(fw._combined_translation_text.toPlainText(), "fallback translated")
         self.assertFalse(fw._is_loading)
+
+    def test_harper_grammar_checkbox_toggles_combined_corrected_text(self):
+        """Toggling a grammar issue checkbox in combined tab must recompute combined corrected text."""
+        fw = self._make_fw()
+        self._set_text_and_style(fw, text="teh quick brown fox")
+        issue = HarperIssue(
+            original="teh",
+            suggestion="the",
+            reason="spelling",
+            severity="warning",
+            edit=LspTextEdit(
+                range=LspRange(start=LspPosition(0, 0), end=LspPosition(0, 3)),
+                newText="the",
+            ),
+        )
+
+        fw._populate_combined_grammar_issues([issue])
+        self.assertEqual(fw._combined_rewrite_texts[0].text_edit.toPlainText(), "the quick brown fox")
+
+        checkboxes = [c for c in fw._combined_grammar_layout.itemAt(0).widget().findChildren(QCheckBox)]
+        self.assertTrue(checkboxes[0].isChecked())
+        checkboxes[0].setChecked(False)
+        self._app.processEvents()
+
+        self.assertEqual(fw._combined_rewrite_texts[0].text_edit.toPlainText(), "teh quick brown fox")
+        self.assertFalse(issue.enabled)
 
 
 

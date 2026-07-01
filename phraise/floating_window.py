@@ -1107,6 +1107,8 @@ class FloatingWindow(QWidget):
         from .harper_types import HarperFixApplier
         corrected = HarperFixApplier.apply_fixes(self._current_text, edits)
         self._rewrite_texts[0].text_edit.setPlainText(corrected)
+        if self._combined_rewrite_texts:
+            self._combined_rewrite_texts[0].text_edit.setPlainText(corrected)
 
     def _clear_layout(self, layout):
         while layout.count():
@@ -1648,12 +1650,13 @@ class FloatingWindow(QWidget):
             self._do_combined_optimize_llm_only()
             return
 
-        self._combined_rewrite_texts[0].text_edit.setPlainText(result.corrected_text)
+        self._combined_rewrite_texts[0].text_edit.clear()
         self._combined_rewrite_texts[1].text_edit.clear()
         self._combined_rewrite_texts[2].text_edit.clear()
+        self._populate_combined_grammar_issues(result.issues)
+        self._combined_rewrite_texts[0].text_edit.setPlainText(result.corrected_text)
         self._combined_rewrite_texts[1].hide()
         self._combined_rewrite_texts[2].hide()
-        self._populate_combined_grammar_issues(result.issues)
         self._combined_optimize_loading.hide()
         self._combined_pending -= 1
         if self._combined_pending <= 0:
@@ -1678,6 +1681,8 @@ class FloatingWindow(QWidget):
             for hover_edit in self._combined_rewrite_texts:
                 hover_edit.text_edit.setPlainText(error)
         elif isinstance(result, dict) and "rewrites" in result:
+            issues = result.get("grammar_issues", [])
+            self._populate_combined_grammar_issues(issues)
             rewrites = result["rewrites"]
             for i, hover_edit in enumerate(self._combined_rewrite_texts):
                 if i < len(rewrites):
@@ -1688,8 +1693,6 @@ class FloatingWindow(QWidget):
                     hover_edit.text_edit.setPlainText(t("fw.no_more_versions"))
             if result.get("_truncated"):
                 self._show_toast(t("fw.toast.truncated"))
-            issues = result.get("grammar_issues", [])
-            self._populate_combined_grammar_issues(issues)
         elif isinstance(result, dict) and "corrected_text" in result:
             self._combined_rewrite_texts[0].text_edit.setPlainText(result["corrected_text"])
         else:
@@ -1739,6 +1742,9 @@ class FloatingWindow(QWidget):
         self._combined_grammar_header.show()
         self._combined_grammar_container.show()
         self._combined_grammar_header.setText(t("fw.label.grammar_expanded"))
+
+        self._grammar_issues = list(issues)
+        self._recompute_corrected_text()
 
         if not issues:
             no_issues = QLabel(t("fw.no_issues"))
